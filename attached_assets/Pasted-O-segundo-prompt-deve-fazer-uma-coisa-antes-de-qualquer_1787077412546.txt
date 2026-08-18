@@ -1,0 +1,222 @@
+O segundo prompt deve fazer uma coisa antes de qualquer código: **obrigar o Replit a localizar a aplicação Web real e produzir o contrato de compatibilidade Web ↔ Mobile**. Assim evitamos que ele continue projetando em cima de modelos presumidos.
+
+Você identificou corretamente que o workspace/repositório atualmente visível para você não contém a implementação real da aplicação Web “Saúde Familiar”.
+
+**NÃO gere código do aplicativo mobile ainda. NÃO crie modelos presumidos para substituir os modelos reais.**
+
+Quero primeiro eliminar essa lacuna e estabelecer um contrato de compatibilidade entre a aplicação Web existente e o futuro aplicativo Mobile.
+
+## 1. Localize a aplicação Web real
+
+Antes de propor qualquer implementação:
+
+1. Verifique quais repositórios, branches, diretórios e arquivos estão efetivamente disponíveis no ambiente.
+2. Procure pela aplicação existente “Saúde Familiar”.
+3. Procure especificamente por evidências de:
+
+   * React / TypeScript;
+   * Node.js / Express;
+   * Firebase Authentication;
+   * Firestore;
+   * modelos/types/interfaces;
+   * rotas ou controllers;
+   * componentes e páginas;
+   * Familiares;
+   * Consultas;
+   * Medicamentos;
+   * Receitas;
+   * Exames;
+   * Profissionais de saúde;
+   * autenticação, usuários, famílias e permissões.
+
+Se você continuar sem acesso ao código real da aplicação Web, **pare nesse ponto** e informe exatamente:
+
+* O que está disponível;
+* O que está faltando;
+* Qual repositório, branch, diretório ou conjunto de arquivos você precisa que eu disponibilize.
+
+Não tente compensar a ausência do código inventando estruturas.
+
+## 2. Se encontrar a aplicação Web, faça uma análise de descoberta
+
+Sem modificar nenhum arquivo, levante a arquitetura atual.
+
+Quero identificar:
+
+* Estrutura do frontend;
+* Estrutura do backend;
+* Como frontend e backend se comunicam;
+* Como Firebase Authentication é utilizado;
+* Como Firestore é acessado;
+* Collections e subcollections existentes;
+* Modelos TypeScript existentes;
+* APIs/endpoints existentes;
+* Sistema atual de usuários, famílias, membros e permissões;
+* Como documentos/anexos são armazenados;
+* Como exclusões são realizadas;
+* Como timestamps e IDs são gerados;
+* Quais entidades possuem histórico ou versionamento.
+
+Diferencie claramente:
+
+* **CONFIRMADO NO CÓDIGO**
+* **INFERIDO**
+* **NÃO ENCONTRADO**
+
+Não transforme inferências em fatos.
+
+## 3. Produza uma matriz de compatibilidade Web ↔ Mobile
+
+Para cada entidade encontrada, produza uma tabela contendo, no mínimo:
+
+| Entidade | Campo atual Web | Tipo atual | Obrigatório? | Mobile precisa? | Estratégia Mobile | Sincronizável? | Observação/Risco |
+| -------- | --------------- | ---------- | ------------ | --------------- | ----------------- | -------------- | ---------------- |
+
+Analise prioritariamente:
+
+* Usuário;
+* Família;
+* Membership/permissões;
+* Familiar/Paciente;
+* Consulta;
+* Profissional de saúde;
+* Medicamento;
+* Tratamento/uso de medicamento, caso exista;
+* Receita;
+* Item de receita, caso exista;
+* Exame;
+* Documentos/anexos.
+
+Não crie entidades inexistentes apenas para preencher a tabela. Se perceber que uma separação futura seria tecnicamente recomendável, coloque-a em uma seção separada chamada **“Evoluções recomendadas”**.
+
+## 4. Avalie especificamente a compatibilidade Local-First
+
+Para cada entidade sincronizável, classifique qual estratégia parece mais apropriada:
+
+* Sincronização simples;
+* Histórico/versionamento;
+* Append-only;
+* Soft delete/tombstone;
+* Conflito que pode ser combinado automaticamente;
+* Conflito que exige decisão do usuário;
+* Não sincronizar inicialmente.
+
+Considere que:
+
+* O Mobile deverá funcionar 100% localmente sem conta;
+* A sincronização com a nuvem será opt-in;
+* Não aceitaremos `last-write-wins` silencioso para informações médicas relevantes;
+* Um registro criado offline deverá manter o mesmo identificador depois da sincronização;
+* Web e Mobile poderão alterar dados em momentos diferentes;
+* Precisamos preservar histórico quando clinicamente relevante.
+
+## 5. Avalie o que deve e o que NÃO deve ir para o Mobile
+
+O aplicativo Mobile NÃO será uma cópia da aplicação Web.
+
+A Web continuará sendo a experiência mais completa para desktop.
+
+O Mobile deve ser extremamente simples e orientado às tarefas mais frequentes, especialmente para usuários leigos e idosos.
+
+Avalie as funcionalidades existentes e classifique-as em:
+
+* **MVP Mobile**
+* **Mobile posterior**
+* **Somente Web**
+* **Precisa de decisão de produto**
+
+Para o MVP Mobile, considere prioritariamente a seguinte jornada:
+
+**Primeiro uso → cadastrar usuário quando necessário → cadastrar familiar/paciente → consultas a agendar → receitas/medicamentos → exames a agendar/acompanhar**
+
+Entretanto, no modo **“Somente neste aparelho”**, não obrigue conceitualmente o usuário a criar conta na nuvem antes de começar a utilizar o aplicativo.
+
+## 6. Identifique incompatibilidades antes de construirmos
+
+Quero uma seção chamada:
+
+# Bloqueadores antes do desenvolvimento Mobile
+
+Liste qualquer característica atual da Web que possa dificultar:
+
+* IDs globais;
+* Offline;
+* Sincronização;
+* Detecção de conflito;
+* Versionamento;
+* Soft delete;
+* Auditoria;
+* Separação entre usuário, família e paciente;
+* Anexos;
+* Segurança;
+* Migração futura;
+* Compatibilidade entre versões do aplicativo.
+
+Classifique cada bloqueador:
+
+* **Crítico**
+* **Alto**
+* **Médio**
+* **Baixo**
+
+E diga se deve ser resolvido:
+
+* Antes do primeiro código Mobile;
+* Antes da sincronização;
+* Antes de produção;
+* Pode ficar para evolução posterior.
+
+## 7. Arquitetura alvo
+
+Depois de analisar o código real, diga se esta arquitetura continua adequada ou precisa ser alterada:
+
+```text
+MOBILE
+React Native + Expo
+        │
+        ▼
+Modelo de Domínio
+        │
+        ▼
+Repository Layer
+        │
+        ▼
+Persistência Local
+SQLite
+        │
+        ├────────── Modo somente neste aparelho
+        │
+        ▼
+Sync Engine
+        │
+        ▼
+Backend/API Saúde Familiar
+        │
+        ▼
+Firestore / serviços GCP
+```
+
+A interface Mobile não deve depender diretamente de documentos Firestore.
+
+Firestore deve permanecer um detalhe da infraestrutura/backend, não o contrato público do aplicativo Mobile.
+
+## 8. Resultado esperado desta etapa
+
+Ao final, entregue:
+
+1. Mapa da arquitetura Web realmente encontrada;
+2. Inventário das entidades e modelos reais;
+3. Matriz Web ↔ Mobile;
+4. Classificação das funcionalidades para MVP Mobile;
+5. Estratégia Local-First por entidade;
+6. Bloqueadores e riscos;
+7. Arquitetura recomendada;
+8. Decisões que precisam ser tomadas por mim antes da implementação;
+9. Uma proposta de fases para desenvolvimento do Mobile.
+
+**Não gere código.**
+**Não altere o repositório.**
+**Não crie projeto Expo ainda.**
+**Não altere Firestore, Firebase, GCP ou aplicação Web.**
+
+Esta etapa é exclusivamente de **descoberta, arquitetura e definição do contrato Web ↔ Mobile**.
