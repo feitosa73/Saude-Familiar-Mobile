@@ -1,0 +1,526 @@
+Com base na análise já realizada do repositório real `feitosa73/Saude-Familiar` e nas premissas que acabamos de consolidar, quero avançar para a próxima etapa de arquitetura.
+
+**NÃO gere código ainda.**
+**NÃO crie o projeto Expo ainda.**
+**NÃO altere o repositório Desktop.**
+**NÃO altere Firebase, Firestore ou GCP.**
+
+Esta etapa é exclusivamente para produzir o **Contrato de Integração Mobile v1**.
+
+## IMPORTANTE SOBRE O TAMANHO DA RESPOSTA
+
+Este contrato é extenso e prefiro completude técnica a uma resposta artificialmente resumida.
+
+Se o detalhamento exceder o limite de saída disponível:
+
+1. Entregue de forma completa as seções **1 a 8**;
+2. Pare em um ponto lógico;
+3. Informe quais seções permanecem pendentes;
+4. Solicite autorização para continuar com as seções **9 a 17**.
+
+**Não reduza, resuma ou omita critérios técnicos das últimas seções apenas para fazer todo o conteúdo caber em uma única resposta.**
+
+# 1. Premissa principal
+
+A aplicação Web/Desktop Saúde Familiar é um sistema existente e continuará funcionando como está.
+
+O repositório Desktop deve ser utilizado como:
+
+* Referência do domínio atual;
+* Referência dos dados existentes;
+* Referência das permissões existentes;
+* Referência de compatibilidade para os dados que futuramente forem sincronizados.
+
+Ele NÃO deve ser tratado como alvo de refatoração.
+
+Mudanças futuras no backend só serão consideradas quando forem estritamente necessárias para habilitar a integração com o Mobile e deverão ser:
+
+* Aditivas;
+* Isoladas;
+* Retrocompatíveis;
+* Sem alterar a experiência atual do Desktop.
+
+# 2. Escopo do Contrato v1
+
+Concentre o contrato apenas nas entidades necessárias para o núcleo do Mobile:
+
+1. Familiar/Paciente;
+2. Consulta;
+3. Medicamento;
+4. Exame;
+5. Documento/Receita.
+
+Considere também os conceitos auxiliares necessários para:
+
+* Workspace local;
+* Identidade cloud;
+* Família;
+* Autorização por paciente;
+* Sincronização;
+* Conflitos;
+* Anexos.
+
+Memberships, convites, solicitações de acesso, administração de membros, MFA, exportações e outras funções administrativas NÃO fazem parte do MVP Mobile.
+
+# 3. Separe Local-Only de Cloud
+
+O Mobile deverá suportar dois estados claramente distintos.
+
+## Modo A — Somente neste aparelho
+
+O usuário poderá começar a utilizar o aplicativo sem:
+
+* Criar conta;
+* Fazer login;
+* Possuir família no cloud;
+* Acessar Firebase;
+* Estar conectado à Internet.
+
+Nesse modo, o usuário poderá cadastrar localmente:
+
+* Familiar/Paciente;
+* Consultas;
+* Medicamentos;
+* Exames;
+* Documentos/Receitas.
+
+Os dados permanecerão no armazenamento privado local do aplicativo.
+
+## Modo B — Sincronizado
+
+Posteriormente, por decisão explícita do usuário, o workspace local poderá ser vinculado à plataforma cloud Saúde Familiar.
+
+Nesse momento poderão existir simultaneamente:
+
+* Dados criados anteriormente no Mobile;
+* Dados já existentes no Desktop/cloud;
+* Dados equivalentes;
+* Dados diferentes;
+* Possíveis conflitos.
+
+O contrato precisa prever essa transição sem assumir que ela será trivial.
+
+## Correspondência Local → Cloud
+
+Analise explicitamente o seguinte cenário:
+
+Um usuário utiliza o Mobile sem conta e cadastra localmente:
+
+`João da Silva — 10/05/1950`
+
+Posteriormente, ativa a sincronização e entra em uma família cloud que já possui um paciente que potencialmente corresponde a esse mesmo João da Silva.
+
+Defina uma estratégia para:
+
+* Detectar possíveis correspondências;
+* Apresentá-las ao usuário;
+* Permitir associar o paciente local ao paciente cloud existente;
+* Permitir manter ambos separados quando forem pessoas diferentes;
+* Evitar duplicação acidental;
+* Tratar os registros clínicos locais associados ao paciente;
+* Tratar diferenças entre os dados cadastrais locais e cloud.
+
+**Não faça merge automático de pacientes baseado apenas em nome, data de nascimento ou heurísticas semelhantes.**
+
+O sistema pode sugerir uma possível correspondência, mas uma fusão/associação de identidades de pacientes deve exigir confirmação explícita do usuário quando não existir um identificador confiável comum.
+
+Explique também como medicamentos, consultas, exames e documentos locais desse paciente seriam tratados após a associação.
+
+# 4. Defina o contrato de cada entidade
+
+Para cada uma das cinco entidades principais, produza uma tabela contendo:
+
+| Campo | Tipo Mobile | Campo equivalente Desktop | Obrigatório local? | Obrigatório cloud? | Criável Mobile? | Editável Mobile? | Sincronizável? | Sensível a conflito? | Observação |
+
+Não invente campos do Desktop.
+
+Quando o Mobile precisar de um campo que não exista no Desktop, identifique explicitamente como:
+
+**Mobile-only**
+
+Quando um campo existir no Desktop mas não for necessário na interface Mobile, classifique como:
+
+**Cloud-preserved**
+
+Isso significa que o Mobile deve preservá-lo durante sincronização sem necessariamente mostrá-lo ou permitir edição.
+
+O Mobile nunca deverá sobrescrever um registro completo com uma representação parcial e apagar campos do Desktop que desconhece.
+
+# 5. Resolva a questão dos identificadores
+
+Na análise anterior foi sugerido que o Mobile deveria criar IDs offline e preservar o mesmo ID no cloud.
+
+Considere isso uma **alternativa**, não uma decisão já tomada.
+
+Compare pelo menos estas estratégias:
+
+## Estratégia A
+
+Um único ID global, como UUID/ULID, criado no Mobile e posteriormente aceito pelo backend/cloud.
+
+## Estratégia B
+
+`localId` no Mobile + `cloudId` depois da sincronização, mantendo um mapeamento permanente entre ambos.
+
+## Estratégia C
+
+Outra estratégia, caso identifique uma solução melhor e compatível com o Desktop atual.
+
+Para cada alternativa avalie:
+
+* Compatibilidade com os IDs existentes do Desktop;
+* Complexidade;
+* Migração;
+* Sincronização;
+* Idempotência;
+* Conflitos;
+* Referências entre entidades;
+* Risco de duplicidade;
+* Impacto no Desktop existente.
+
+Considere também o cenário de associação entre um paciente criado localmente e um paciente já existente no cloud.
+
+Ao final, faça uma recomendação, mas **não implemente**.
+
+# 6. Defina os estados de sincronização
+
+Proponha uma máquina de estados simples e compreensível.
+
+Avalie estados conceituais como:
+
+* `local_only`
+* `pending`
+* `syncing`
+* `synced`
+* `conflict`
+* `error`
+* `deleted_pending`
+
+Não considere esses nomes obrigatórios.
+
+Defina:
+
+* O significado de cada estado;
+* Quais transições são permitidas;
+* O que acontece sem Internet;
+* O que acontece após erro;
+* O que acontece quando existe conflito;
+* O que acontece quando o usuário pausa a sincronização.
+
+Esses estados técnicos não precisam aparecer literalmente para o usuário.
+
+A interface deverá traduzi-los para linguagem simples, como:
+
+* “Somente neste aparelho”
+* “Aguardando sincronização”
+* “Sincronizado”
+* “Precisamos confirmar uma informação”
+
+# 7. Defina a política de conflitos
+
+Não use `last-write-wins` silencioso para informações médicas relevantes.
+
+Classifique os campos das cinco entidades em três categorias:
+
+### Categoria A — Merge automático seguro
+
+Alterações independentes que podem ser combinadas sem risco significativo.
+
+### Categoria B — Conflito exige confirmação
+
+Exemplos esperados:
+
+* Dosagem;
+* Frequência;
+* Horários de medicamento;
+* Alergias;
+* Data de consulta;
+* Cancelamento;
+* Resultado/status clínico;
+* Substituição de documento/receita.
+
+### Categoria C — Server/Cloud authoritative
+
+Informações que o Mobile não deve decidir localmente, especialmente:
+
+* Permissões;
+* Membership;
+* Papéis;
+* Autorizações;
+* Identidade Firebase.
+
+Para cada conflito relevante, descreva o comportamento esperado.
+
+# 8. Exclusões
+
+O Desktop atualmente utiliza exclusões físicas em vários pontos.
+
+Como não queremos refatorar o Desktop apenas para atender ao Mobile, proponha uma estratégia de integração que permita ao Mobile lidar com exclusões sem exigir imediatamente a substituição de todos os `.delete()` existentes.
+
+Compare alternativas como:
+
+* Tombstones em coleção auxiliar;
+* Registro de operações de sincronização;
+* Metadados separados;
+* Outra solução que considere superior.
+
+Explique como um Mobile que ficou offline por vários dias descobriria que determinado registro foi removido no cloud.
+
+Não implemente.
+
+# 9. Contrato de API Mobile
+
+Proponha conceitualmente o menor conjunto de operações necessário para integração.
+
+Não quero dezenas de endpoints CRUD simplesmente copiando o Desktop.
+
+Avalie um contrato semelhante a:
+
+```text
+POST /api/mobile/sync/push
+GET  /api/mobile/sync/pull
+POST /api/mobile/sync/resolve-conflict
+POST /api/mobile/attachments
+```
+
+Esses nomes são apenas exemplos.
+
+Para cada operação proposta, descreva:
+
+* Objetivo;
+* Entrada conceitual;
+* Saída conceitual;
+* Autenticação;
+* Autorização;
+* Idempotência;
+* Tratamento de erro;
+* Como evita sobrescrever campos desconhecidos do Desktop.
+
+Não escreva implementação.
+
+# 10. Autorização
+
+No modo local-only não existe autorização cloud.
+
+No modo sincronizado, a API deve validar no servidor:
+
+1. Firebase UID;
+2. Família;
+3. Acesso ao paciente;
+4. Papel/permissão;
+5. Operação solicitada.
+
+O Mobile nunca deve ser considerado fonte confiável de autorização.
+
+Explique como reutilizar conceitualmente o modelo existente:
+
+* `Membership`;
+* `PatientAccess`;
+* `ADMIN`;
+* `CAREGIVER`;
+* `VIEWER`;
+
+sem levar a complexidade administrativa dessas estruturas para a interface Mobile.
+
+# 11. Documentos, Receitas e arquivos locais
+
+O Desktop atualmente trata Receita como categoria de `MedicalDocument`, e o armazenamento real dos arquivos ainda não está concluído.
+
+Portanto:
+
+* Não crie ainda uma entidade Prescription apenas porque arquiteturalmente seria mais elegante;
+* Para o Contrato v1, considere Receita como Documento;
+* Mostre como o Mobile poderá guardar foto/PDF localmente;
+* Separe sincronização de metadados e sincronização do arquivo;
+* Defina quando um documento pode ser considerado realmente sincronizado;
+* Considere falha de upload, arquivo ausente e reenvio;
+* Considere que futuramente Receita poderá evoluir para um modelo estruturado.
+
+## Regra obrigatória para armazenamento local
+
+O banco local, como SQLite, deve armazenar **somente metadados e a referência/URI/caminho para o arquivo no armazenamento privado do aplicativo**.
+
+**Não armazene imagens, PDFs ou outros documentos como Base64 ou binários/BLOBs dentro das tabelas SQLite nesta arquitetura inicial.**
+
+A arquitetura conceitual deve ser:
+
+```text
+Registro SQLite
+    │
+    ├── metadados
+    ├── localFileUri
+    └── estado do arquivo
+             │
+             ▼
+Armazenamento privado de arquivos do aplicativo
+             │
+             ▼
+foto / PDF / documento
+```
+
+Analise também:
+
+* O que acontece se o registro SQLite existir e o arquivo tiver desaparecido;
+* O que acontece se o arquivo existir mas os metadados estiverem inconsistentes;
+* Como detectar arquivo corrompido;
+* Como reexecutar upload sem duplicação;
+* Quando remover o arquivo local após sincronização, se isso for desejável;
+* Como evitar que arquivos clínicos sejam expostos em áreas públicas/galeria do aparelho.
+
+A arquitetura atual não deve impedir uma futura evolução de Receita para um modelo estruturado.
+
+# 12. Datas e horários
+
+Defina uma política explícita para:
+
+* Data de nascimento;
+* Data/hora de consulta;
+* Horários recorrentes de medicamentos;
+* Data de início/fim de medicamento;
+* Data de solicitação/realização de exame;
+* Data de documentos.
+
+Diferencie claramente:
+
+* Data civil;
+* Horário local recorrente;
+* Instante absoluto;
+* Timezone quando necessário.
+
+Não trate tudo indiscriminadamente como UTC.
+
+# 13. Compatibilidade futura
+
+Defina como Mobile e Desktop deverão conviver quando:
+
+* O Desktop adicionar um campo novo;
+* O Mobile adicionar um campo local;
+* O Mobile estiver várias versões atrasado;
+* Surgir um novo valor de enum;
+* Um campo deixar de existir;
+* Um registro tiver sido criado por uma versão antiga do Mobile.
+
+O objetivo é evitar atualizações obrigatórias do aplicativo a cada pequena mudança no Desktop.
+
+# 14. Segurança local
+
+Sem escolher ainda uma tecnologia definitiva, defina os requisitos para proteção dos dados no aparelho:
+
+* SQLite/local database;
+* Arquivos;
+* Tokens;
+* Credenciais;
+* Chaves;
+* Backup;
+* Logs;
+* Dados temporários;
+* Logout/desvinculação;
+* Perda do aparelho.
+
+Diferencie:
+
+* O que Expo/Android já oferece;
+* O que exigirá implementação adicional;
+* O que precisa de decisão arquitetural posterior.
+
+Não escolha SQLCipher automaticamente sem comparar impacto, benefício e compatibilidade com Expo.
+
+# 15. UX da sincronização
+
+A complexidade técnica não deve contaminar a interface.
+
+Proponha como comunicar de forma simples:
+
+* Dados somente locais;
+* Sincronização ativada;
+* Sincronização concluída;
+* Alterações pendentes;
+* Falha;
+* Conflito;
+* App offline.
+
+Evite termos como:
+
+* push;
+* pull;
+* tombstone;
+* revision;
+* outbox;
+* merge;
+
+na interface destinada ao usuário comum.
+
+# 16. DECISÕES PARA APROVAÇÃO
+
+Liste apenas decisões arquiteturais ou de produto que realmente precisam ser tomadas antes de começarmos a implementação.
+
+Inclua explicitamente, caso ainda permaneçam abertas:
+
+* Estratégia de IDs;
+* Associação entre paciente Local e paciente Cloud;
+* Política de vinculação Local-Only → Cloud;
+* Política de conflitos;
+* Política de backup local;
+* Segurança dos dados no aparelho;
+* Escopo inicial de documentos;
+* Outras decisões realmente bloqueantes identificadas na análise.
+
+Para cada decisão apresente:
+
+**Decisão X — [nome]**
+
+**Opção A:**
+Descrição.
+
+**Opção B:**
+Descrição.
+
+**Opção C**, somente quando realmente existir uma terceira alternativa relevante.
+
+**Sua recomendação:**
+Opção escolhida e justificativa.
+
+**Impacto se adiarmos:**
+O que podemos ou não construir enquanto a decisão permanecer aberta.
+
+Não transforme preferências técnicas triviais em decisões executivas.
+
+# 17. Resultado esperado
+
+Entregue, nesta ordem:
+
+1. Princípios do Contrato de Integração Mobile v1;
+2. Modelo Local-Only;
+3. Modelo Sincronizado;
+4. Contrato das cinco entidades;
+5. Estratégia de IDs;
+6. Estados de sincronização;
+7. Política de conflitos;
+8. Política de exclusões;
+9. Contrato conceitual da API Mobile;
+10. Autorização;
+11. Documentos/Receitas e anexos;
+12. Política de datas e horários;
+13. Compatibilidade entre versões;
+14. Segurança local;
+15. UX da sincronização;
+16. Decisões para aprovação;
+17. Recomendação da próxima etapa.
+
+## RESTRIÇÕES FINAIS
+
+Nesta etapa:
+
+* NÃO gere código;
+* NÃO altere arquivos;
+* NÃO crie Expo;
+* NÃO crie banco SQLite;
+* NÃO crie endpoints;
+* NÃO altere o Desktop;
+* NÃO altere Firestore;
+* NÃO altere Firebase;
+* NÃO altere GCP;
+* NÃO faça commits;
+* NÃO faça deploy.
+
+Quero primeiro revisar e aprovar o **Contrato de Integração Mobile v1** antes de autorizar qualquer implementação.
