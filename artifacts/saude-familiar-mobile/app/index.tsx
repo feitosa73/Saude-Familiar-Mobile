@@ -12,11 +12,12 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import type { Caregiver } from '@/domain/caregiver';
 import type { Patient } from '@/domain/patient';
 import { useColors } from '@/hooks/useColors';
 import { useLocalData } from '@/context/LocalDataContext';
 
-type OnboardingStep = 'welcome' | 'form';
+type OnboardingStep = 'welcome' | 'caregiver-form';
 
 function firstNameOf(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name;
@@ -159,11 +160,11 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
             PRIMEIRO PASSO
           </Text>
           <Text style={[styles.welcomeTitle, { color: colors.foreground }]}>
-            Cuidar começa com uma informação de cada vez.
+            Antes de começar, conte quem está cuidando.
           </Text>
           <Text style={[styles.welcomeDescription, { color: colors.mutedForeground }]}>
-            O Saúde Familiar funciona somente neste aparelho. Você não precisa criar
-            uma conta para começar.
+            Diga como podemos chamar você. Depois, vamos cadastrar a pessoa que você
+            quer acompanhar.
           </Text>
         </View>
 
@@ -184,7 +185,7 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
 
         <View style={styles.welcomeAction}>
           <PrimaryButton
-            label="Cadastrar familiar"
+            label="Criar meu perfil"
             onPress={onStart}
             testID="welcome-start"
           />
@@ -210,11 +211,124 @@ function PromiseRow({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text
   );
 }
 
-function PatientForm({
+function CaregiverForm({
   onBack,
   onSaved,
 }: {
   onBack: () => void;
+  onSaved: (name: string) => Promise<void>;
+}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const [name, setName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function handleSubmit() {
+    Keyboard.dismiss();
+    setError(null);
+
+    if (name.trim().length < 2) {
+      setError('Informe seu nome para continuar.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onSaved(name.trim());
+    } catch {
+      setError('Não foi possível salvar agora. Tente novamente.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <View style={[styles.page, { backgroundColor: colors.background }]}>
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={[
+          styles.formContent,
+          { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 },
+        ]}
+        bottomOffset={72}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Pressable
+          accessibilityLabel="Voltar para a introdução"
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => [
+            styles.backButton,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            pressed ? styles.pressed : null,
+          ]}
+          testID="caregiver-form-back"
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+        </Pressable>
+
+        <View style={[styles.formIcon, { backgroundColor: colors.secondary }]}>
+          <Ionicons name="person-circle-outline" size={30} color={colors.primary} />
+        </View>
+        <Text style={[styles.formTitle, { color: colors.foreground }]}>
+          Como podemos chamar você?
+        </Text>
+        <Text style={[styles.formDescription, { color: colors.mutedForeground }]}>
+          Este é o seu perfil de quem está cuidando. Depois, você poderá cadastrar o familiar que deseja acompanhar.
+        </Text>
+
+        <View style={styles.formFields}>
+          <FieldLabel label="Seu nome" required />
+          <TextInput
+            accessibilityLabel="Seu nome"
+            autoCapitalize="words"
+            autoCorrect={false}
+            onChangeText={setName}
+            onSubmitEditing={() => void handleSubmit()}
+            placeholder="Ex.: Paulo da Silva"
+            placeholderTextColor={colors.mutedForeground}
+            returnKeyType="done"
+            style={[
+              styles.input,
+              { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground },
+            ]}
+            testID="caregiver-name-input"
+            value={name}
+          />
+        </View>
+
+        {error ? (
+          <View style={[styles.errorBox, { backgroundColor: colors.accent }]}>
+            <Ionicons name="alert-circle-outline" size={20} color={colors.accentForeground} />
+            <Text style={[styles.errorText, { color: colors.accentForeground }]}>{error}</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.formAction}>
+          <PrimaryButton
+            disabled={isSaving}
+            label="Salvar meu perfil"
+            onPress={() => void handleSubmit()}
+            testID="caregiver-save"
+          />
+          <View style={styles.privacyNote}>
+            <Ionicons name="lock-closed-outline" size={16} color={colors.primary} />
+            <Text style={[styles.privacyText, { color: colors.mutedForeground }]}>
+              Seu nome fica somente neste aparelho
+            </Text>
+          </View>
+        </View>
+      </KeyboardAwareScrollViewCompat>
+    </View>
+  );
+}
+
+function PatientForm({
+  onBack,
+  onSaved,
+}: {
+  onBack?: () => void;
   onSaved: (name: string, birthDate?: string | null) => Promise<void>;
 }) {
   const colors = useColors();
@@ -260,19 +374,21 @@ function PatientForm({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
-          accessibilityLabel="Voltar para a introdução"
-          accessibilityRole="button"
-          onPress={onBack}
-          style={({ pressed }) => [
-            styles.backButton,
-            { backgroundColor: colors.card, borderColor: colors.border },
-            pressed ? styles.pressed : null,
-          ]}
-          testID="patient-form-back"
-        >
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
-        </Pressable>
+        {onBack ? (
+          <Pressable
+            accessibilityLabel="Voltar para a introdução"
+            accessibilityRole="button"
+            onPress={onBack}
+            style={({ pressed }) => [
+              styles.backButton,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed ? styles.pressed : null,
+            ]}
+            testID="patient-form-back"
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+          </Pressable>
+        ) : null}
 
         <View style={[styles.formIcon, { backgroundColor: colors.secondary }]}>
           <Ionicons name="person-outline" size={30} color={colors.primary} />
@@ -360,7 +476,7 @@ function FieldLabel({ label, required }: { label: string; required?: boolean }) 
   );
 }
 
-function HomeScreen({ patient }: { patient: Patient }) {
+function HomeScreen({ caregiver, patient }: { caregiver: Caregiver; patient: Patient }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
@@ -378,10 +494,10 @@ function HomeScreen({ patient }: { patient: Patient }) {
           <View style={styles.homeHeaderCopy}>
             <Text style={[styles.homeEyebrow, { color: colors.primary }]}>SEU ESPAÇO</Text>
             <Text style={[styles.homeTitle, { color: colors.foreground }]}>
-              Olá, {firstNameOf(patient.name)}.
+              Olá, {firstNameOf(caregiver.name)}.
             </Text>
             <Text style={[styles.homeSubtitle, { color: colors.mutedForeground }]}>
-              Seu familiar está salvo neste aparelho.
+              Você está acompanhando {patient.name}.
             </Text>
           </View>
           <View style={[styles.homeAvatar, { backgroundColor: colors.primary }]}>
@@ -404,7 +520,7 @@ function HomeScreen({ patient }: { patient: Patient }) {
             Cadastro concluído
           </Text>
           <Text style={[styles.readyDescription, { color: colors.mutedForeground }]}>
-            {patient.name} já está pronto para ser acompanhado por você.
+            {patient.name} já está pronto para ser acompanhado.
           </Text>
           <View style={[styles.patientSummary, { borderTopColor: colors.border }]}>
             <Ionicons name="calendar-outline" size={18} color={colors.primary} />
@@ -420,11 +536,11 @@ function HomeScreen({ patient }: { patient: Patient }) {
           <Ionicons name="shield-checkmark-outline" size={22} color={colors.primary} />
           <View style={styles.infoCopy}>
             <Text style={[styles.infoTitle, { color: colors.secondaryForeground }]}>
-              Seus dados estão protegidos
+              Dados somente neste aparelho
             </Text>
             <Text style={[styles.infoDescription, { color: colors.mutedForeground }]}>
-              Nesta primeira versão, nada é enviado para a Internet. O próximo passo
-              será construído quando você aprovar.
+              Nesta primeira versão, nada é enviado para a Internet. Você pode continuar
+              usando o aplicativo mesmo sem conexão.
             </Text>
           </View>
         </View>
@@ -474,28 +590,38 @@ function DatabaseErrorScreen({ onRetry }: { onRetry: () => void }) {
 }
 
 export default function IndexScreen() {
-  const { status, patient, error, createPatient, retry } = useLocalData();
+  const { status, caregiver, patient, createCaregiver, createPatient, retry } = useLocalData();
   const [step, setStep] = useState<OnboardingStep>('welcome');
 
   if (status === 'loading') {
     return <LoadingScreen />;
   }
 
-  if (status === 'error' || error && !patient) {
+  if (status === 'error') {
     return <DatabaseErrorScreen onRetry={() => void retry()} />;
   }
 
-  if (patient) {
-    return <HomeScreen patient={patient} />;
+  if (caregiver && patient) {
+    return <HomeScreen caregiver={caregiver} patient={patient} />;
   }
 
-  if (step === 'welcome') {
-    return <WelcomeScreen onStart={() => setStep('form')} />;
+  if (!caregiver) {
+    if (step === 'welcome') {
+      return <WelcomeScreen onStart={() => setStep('caregiver-form')} />;
+    }
+
+    return (
+      <CaregiverForm
+        onBack={() => setStep('welcome')}
+        onSaved={async (name) => {
+          await createCaregiver({ name });
+        }}
+      />
+    );
   }
 
   return (
     <PatientForm
-      onBack={() => setStep('welcome')}
       onSaved={async (name, birthDate) => {
         await createPatient({ name, birthDate });
       }}

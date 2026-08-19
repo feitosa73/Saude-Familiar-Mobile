@@ -2,6 +2,8 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 const INITIAL_MIGRATION = 1;
 const OPTIONAL_BIRTH_DATE_MIGRATION = 2;
+const CAREGIVER_MIGRATION = 3;
+const CAREGIVER_SINGLETON_MIGRATION = 4;
 
 async function getLatestMigration(database: SQLiteDatabase): Promise<number> {
   const migration = await database.getFirstAsync<{ version: number }>(
@@ -77,6 +79,48 @@ async function migrateBirthDateToOptional(database: SQLiteDatabase): Promise<voi
   });
 }
 
+async function createCaregiverSchema(database: SQLiteDatabase): Promise<void> {
+  await database.withTransactionAsync(async () => {
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS caregivers (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        photo_uri TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    await database.runAsync(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+      CAREGIVER_MIGRATION,
+      new Date().toISOString(),
+    );
+  });
+}
+
+async function enforceSingleCaregiver(database: SQLiteDatabase): Promise<void> {
+  await database.withTransactionAsync(async () => {
+    await database.execAsync(`
+      DELETE FROM caregivers
+      WHERE id NOT IN (
+        SELECT id
+        FROM caregivers
+        ORDER BY created_at ASC, id ASC
+        LIMIT 1
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS caregivers_singleton_idx
+        ON caregivers ((1));
+    `);
+
+    await database.runAsync(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+      CAREGIVER_SINGLETON_MIGRATION,
+      new Date().toISOString(),
+    );
+  });
+}
+
 export async function initializeDatabase(database: SQLiteDatabase): Promise<void> {
   await database.execAsync('PRAGMA journal_mode = WAL;');
   await database.execAsync(`
@@ -95,5 +139,13 @@ export async function initializeDatabase(database: SQLiteDatabase): Promise<void
 
   if (currentVersion < OPTIONAL_BIRTH_DATE_MIGRATION) {
     await migrateBirthDateToOptional(database);
+    currentVersion = OPTIONAL_BIRTH_DATE_MIGRATION;
+  }
+  if (currentVersion < CAREGIVER_MIGRATION) {
+    await createCaregiverSchema(database);
+    currentVersion = CAREGIVER_MIGRATION;
+  }
+  if (currentVersion < CAREGIVER_SINGLETON_MIGRATION) {
+    await enforceSingleCaregiver(database);
   }
 }
