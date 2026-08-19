@@ -1,7 +1,7 @@
 export type Patient = {
   id: string;
   name: string;
-  birthDate: string;
+  birthDate: string | null;
   bloodType: string | null;
   allergies: string | null;
   emergencyContacts: string | null;
@@ -15,5 +15,5 @@ export type Patient = {
 
 export type CreatePatientInput = {
   name: string;
-  birthDate: string;
+  birthDate?: string | null;
 };

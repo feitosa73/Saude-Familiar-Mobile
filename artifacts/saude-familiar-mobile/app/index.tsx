@@ -215,7 +215,7 @@ function PatientForm({
   onSaved,
 }: {
   onBack: () => void;
-  onSaved: (name: string, birthDate: string) => Promise<void>;
+  onSaved: (name: string, birthDate?: string | null) => Promise<void>;
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -233,8 +233,8 @@ function PatientForm({
       return;
     }
 
-    const civilDate = parseCivilDate(birthDate);
-    if (!civilDate) {
+    const civilDate = birthDate.trim() ? parseCivilDate(birthDate) : null;
+    if (birthDate.trim() && !civilDate) {
       setError('Informe uma data de nascimento válida no formato DD/MM/AAAA.');
       return;
     }
@@ -303,7 +303,7 @@ function PatientForm({
             value={name}
           />
 
-          <FieldLabel label="Data de nascimento" required />
+          <FieldLabel label="Data de nascimento" />
           <TextInput
             accessibilityLabel="Data de nascimento"
             keyboardType="number-pad"
@@ -319,7 +319,7 @@ function PatientForm({
             value={birthDate}
           />
           <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>
-            Usamos a data apenas para organizar o cadastro.
+            Opcional. Você poderá informar depois.
           </Text>
         </View>
 
@@ -409,7 +409,9 @@ function HomeScreen({ patient }: { patient: Patient }) {
           <View style={[styles.patientSummary, { borderTopColor: colors.border }]}>
             <Ionicons name="calendar-outline" size={18} color={colors.primary} />
             <Text style={[styles.patientSummaryText, { color: colors.foreground }]}>
-              Nascimento: {formatCivilDate(patient.birthDate)}
+              {patient.birthDate
+                ? `Nascimento: ${formatCivilDate(patient.birthDate)}`
+                : 'Data de nascimento não informada'}
             </Text>
           </View>
         </View>

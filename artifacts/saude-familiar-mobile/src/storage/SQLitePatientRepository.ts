@@ -6,7 +6,7 @@ import { createGlobalId } from '@/utils/ids';
 type PatientRow = {
   id: string;
   name: string;
-  birth_date: string;
+  birth_date: string | null;
   blood_type: string | null;
   allergies: string | null;
   emergency_contacts: string | null;
@@ -51,7 +51,7 @@ export class SQLitePatientRepository implements PatientRepository {
     const patient: Patient = {
       id: await createGlobalId(),
       name: input.name.trim(),
-      birthDate: input.birthDate,
+      birthDate: input.birthDate ?? null,
       bloodType: null,
       allergies: null,
       emergencyContacts: null,
