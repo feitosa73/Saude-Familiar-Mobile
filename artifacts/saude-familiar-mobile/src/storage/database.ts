@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from "expo-sqlite";
+import type { SQLiteDatabase } from 'expo-sqlite';
 
 const INITIAL_MIGRATION = 1;
 const OPTIONAL_BIRTH_DATE_MIGRATION = 2;
@@ -6,7 +6,7 @@ const CAREGIVER_MIGRATION = 3;
 
 async function getLatestMigration(database: SQLiteDatabase): Promise<number> {
   const migration = await database.getFirstAsync<{ version: number }>(
-    "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1",
+    'SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1',
   );
 
   return migration?.version ?? 0;
@@ -31,15 +31,13 @@ async function createInitialSchema(database: SQLiteDatabase): Promise<void> {
   `);
 
   await database.runAsync(
-    "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+    'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
     INITIAL_MIGRATION,
     new Date().toISOString(),
   );
 }
 
-async function migrateBirthDateToOptional(
-  database: SQLiteDatabase,
-): Promise<void> {
+async function migrateBirthDateToOptional(database: SQLiteDatabase): Promise<void> {
   await database.withTransactionAsync(async () => {
     await database.execAsync(`
       CREATE TABLE patients_v2 (
@@ -73,7 +71,7 @@ async function migrateBirthDateToOptional(
     `);
 
     await database.runAsync(
-      "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
       OPTIONAL_BIRTH_DATE_MIGRATION,
       new Date().toISOString(),
     );
@@ -81,26 +79,27 @@ async function migrateBirthDateToOptional(
 }
 
 async function createCaregiverSchema(database: SQLiteDatabase): Promise<void> {
-  await database.execAsync(`
-    CREATE TABLE IF NOT EXISTS caregivers (
-      id TEXT PRIMARY KEY NOT NULL,
-      name TEXT NOT NULL,
-      photo_uri TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+  await database.withTransactionAsync(async () => {
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS caregivers (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        photo_uri TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+
+    await database.runAsync(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+      CAREGIVER_MIGRATION,
+      new Date().toISOString(),
     );
-  `);
-  await database.runAsync(
-    "INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)",
-    CAREGIVER_MIGRATION,
-    new Date().toISOString(),
-  );
+  });
 }
 
-export async function initializeDatabase(
-  database: SQLiteDatabase,
-): Promise<void> {
-  await database.execAsync("PRAGMA journal_mode = WAL;");
+export async function initializeDatabase(database: SQLiteDatabase): Promise<void> {
+  await database.execAsync('PRAGMA journal_mode = WAL;');
   await database.execAsync(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY NOT NULL,

@@ -5,14 +5,14 @@ import React, {
   useEffect,
   useMemo,
   useState,
-} from "react";
-import { useSQLiteContext } from "expo-sqlite";
-import type { Caregiver, CreateCaregiverInput } from "@/domain/caregiver";
-import type { CreatePatientInput, Patient } from "@/domain/patient";
-import { SQLiteCaregiverRepository } from "@/storage/SQLiteCaregiverRepository";
-import { SQLitePatientRepository } from "@/storage/SQLitePatientRepository";
+} from 'react';
+import { useSQLiteContext } from 'expo-sqlite';
+import type { Caregiver, CreateCaregiverInput } from '@/domain/caregiver';
+import type { CreatePatientInput, Patient } from '@/domain/patient';
+import { SQLiteCaregiverRepository } from '@/storage/SQLiteCaregiverRepository';
+import { SQLitePatientRepository } from '@/storage/SQLitePatientRepository';
 
-type LocalDataStatus = "loading" | "ready" | "error";
+type LocalDataStatus = 'loading' | 'ready' | 'error';
 
 type LocalDataContextValue = {
   status: LocalDataStatus;
@@ -36,13 +36,13 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     () => new SQLitePatientRepository(database),
     [database],
   );
-  const [status, setStatus] = useState<LocalDataStatus>("loading");
+  const [status, setStatus] = useState<LocalDataStatus>('loading');
   const [caregiver, setCaregiver] = useState<Caregiver | null>(null);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadLocalData = useCallback(async () => {
-    setStatus("loading");
+    setStatus('loading');
     setError(null);
 
     try {
@@ -52,10 +52,10 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       ]);
       setCaregiver(currentCaregiver);
       setPatient(currentPatient);
-      setStatus("ready");
+      setStatus('ready');
     } catch {
-      setStatus("error");
-      setError("Não foi possível abrir os dados deste aparelho.");
+      setStatus('error');
+      setError('Não foi possível abrir os dados deste aparelho.');
     }
   }, [caregiverRepository, patientRepository]);
 
@@ -69,10 +69,10 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
         const createdCaregiver = await caregiverRepository.create(input);
         setCaregiver(createdCaregiver);
         setError(null);
-        setStatus("ready");
+        setStatus('ready');
         return createdCaregiver;
       } catch {
-        const message = "Não foi possível salvar seu perfil. Tente novamente.";
+        const message = 'Não foi possível salvar seu perfil. Tente novamente.';
         setError(message);
         throw new Error(message);
       }
@@ -86,10 +86,10 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
         const createdPatient = await patientRepository.create(input);
         setPatient(createdPatient);
         setError(null);
-        setStatus("ready");
+        setStatus('ready');
         return createdPatient;
       } catch {
-        const message = "Não foi possível salvar o familiar. Tente novamente.";
+        const message = 'Não foi possível salvar o familiar. Tente novamente.';
         setError(message);
         throw new Error(message);
       }
@@ -107,15 +107,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       createPatient,
       retry: loadLocalData,
     }),
-    [
-      caregiver,
-      createCaregiver,
-      createPatient,
-      error,
-      loadLocalData,
-      patient,
-      status,
-    ],
+    [caregiver, createCaregiver, createPatient, error, loadLocalData, patient, status],
   );
 
   return (
@@ -129,7 +121,7 @@ export function useLocalData(): LocalDataContextValue {
   const context = useContext(LocalDataContext);
 
   if (!context) {
-    throw new Error("useLocalData deve ser usado dentro de LocalDataProvider.");
+    throw new Error('useLocalData deve ser usado dentro de LocalDataProvider.');
   }
 
   return context;

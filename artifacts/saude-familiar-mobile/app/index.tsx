@@ -1,5 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useState } from "react";
+import { Ionicons } from '@expo/vector-icons';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -9,22 +9,22 @@ import {
   Text,
   TextInput,
   View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
-import type { Caregiver } from "@/domain/caregiver";
-import type { Patient } from "@/domain/patient";
-import { useColors } from "@/hooks/useColors";
-import { useLocalData } from "@/context/LocalDataContext";
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
+import type { Caregiver } from '@/domain/caregiver';
+import type { Patient } from '@/domain/patient';
+import { useColors } from '@/hooks/useColors';
+import { useLocalData } from '@/context/LocalDataContext';
 
-type OnboardingStep = "welcome" | "caregiver-form";
+type OnboardingStep = 'welcome' | 'caregiver-form';
 
 function firstNameOf(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name;
 }
 
 function formatBirthDateInput(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 8);
+  const digits = value.replace(/\D/g, '').slice(0, 8);
 
   if (digits.length <= 2) return digits;
   if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
@@ -58,7 +58,7 @@ function parseCivilDate(value: string): string | null {
 }
 
 function formatCivilDate(value: string): string {
-  const [year, month, day] = value.split("-");
+  const [year, month, day] = value.split('-');
   return `${day}/${month}/${year}`;
 }
 
@@ -74,9 +74,7 @@ function LocalBadge() {
       ]}
     >
       <Ionicons name="lock-closed-outline" size={16} color={colors.primary} />
-      <Text
-        style={[styles.localBadgeText, { color: colors.secondaryForeground }]}
-      >
+      <Text style={[styles.localBadgeText, { color: colors.secondaryForeground }]}>
         Somente neste aparelho
       </Text>
     </View>
@@ -114,19 +112,10 @@ function PrimaryButton({
         <ActivityIndicator color={colors.mutedForeground} />
       ) : (
         <>
-          <Text
-            style={[
-              styles.primaryButtonText,
-              { color: colors.primaryForeground },
-            ]}
-          >
+          <Text style={[styles.primaryButtonText, { color: colors.primaryForeground }]}>
             {label}
           </Text>
-          <Ionicons
-            name="arrow-forward"
-            size={20}
-            color={colors.primaryForeground}
-          />
+          <Ionicons name="arrow-forward" size={20} color={colors.primaryForeground} />
         </>
       )}
     </Pressable>
@@ -150,16 +139,14 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
         <View style={styles.brandRow}>
           <Image
             accessibilityLabel="Símbolo Saúde Familiar"
-            source={require("../assets/images/icon.png")}
+            source={require('../assets/images/icon.png')}
             style={styles.logo}
           />
           <View>
             <Text style={[styles.brandName, { color: colors.foreground }]}>
               Saúde Familiar
             </Text>
-            <Text
-              style={[styles.brandCaption, { color: colors.mutedForeground }]}
-            >
+            <Text style={[styles.brandCaption, { color: colors.mutedForeground }]}>
               Cuidado simples, no seu ritmo
             </Text>
           </View>
@@ -167,11 +154,7 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
 
         <View style={styles.welcomeHero}>
           <View style={[styles.heroIcon, { backgroundColor: colors.accent }]}>
-            <Ionicons
-              name="heart-outline"
-              size={42}
-              color={colors.accentForeground}
-            />
+            <Ionicons name="heart-outline" size={42} color={colors.accentForeground} />
           </View>
           <Text style={[styles.eyebrow, { color: colors.primary }]}>
             PRIMEIRO PASSO
@@ -179,14 +162,9 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
           <Text style={[styles.welcomeTitle, { color: colors.foreground }]}>
             Antes de começar, conte quem está cuidando.
           </Text>
-          <Text
-            style={[
-              styles.welcomeDescription,
-              { color: colors.mutedForeground },
-            ]}
-          >
-            Diga como podemos chamar você. Depois, vamos cadastrar a pessoa que
-            você quer acompanhar.
+          <Text style={[styles.welcomeDescription, { color: colors.mutedForeground }]}>
+            Diga como podemos chamar você. Depois, vamos cadastrar a pessoa que você
+            quer acompanhar.
           </Text>
         </View>
 
@@ -199,7 +177,10 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
             icon="shield-checkmark-outline"
             text="Seus dados ficam neste aparelho"
           />
-          <PromiseRow icon="wifi-outline" text="Funciona mesmo sem Internet" />
+          <PromiseRow
+            icon="wifi-outline"
+            text="Funciona mesmo sem Internet"
+          />
         </View>
 
         <View style={styles.welcomeAction}>
@@ -217,13 +198,7 @@ function WelcomeScreen({ onStart }: { onStart: () => void }) {
   );
 }
 
-function PromiseRow({
-  icon,
-  text,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  text: string;
-}) {
+function PromiseRow({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: string }) {
   const colors = useColors();
 
   return (
@@ -231,9 +206,7 @@ function PromiseRow({
       <View style={[styles.promiseIcon, { backgroundColor: colors.secondary }]}>
         <Ionicons name={icon} size={19} color={colors.primary} />
       </View>
-      <Text style={[styles.promiseText, { color: colors.foreground }]}>
-        {text}
-      </Text>
+      <Text style={[styles.promiseText, { color: colors.foreground }]}>{text}</Text>
     </View>
   );
 }
@@ -247,7 +220,7 @@ function CaregiverForm({
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [name, setName] = useState("");
+  const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -256,7 +229,7 @@ function CaregiverForm({
     setError(null);
 
     if (name.trim().length < 2) {
-      setError("Informe seu nome para continuar.");
+      setError('Informe seu nome para continuar.');
       return;
     }
 
@@ -264,7 +237,7 @@ function CaregiverForm({
     try {
       await onSaved(name.trim());
     } catch {
-      setError("Não foi possível salvar agora. Tente novamente.");
+      setError('Não foi possível salvar agora. Tente novamente.');
     } finally {
       setIsSaving(false);
     }
@@ -296,20 +269,13 @@ function CaregiverForm({
         </Pressable>
 
         <View style={[styles.formIcon, { backgroundColor: colors.secondary }]}>
-          <Ionicons
-            name="person-circle-outline"
-            size={30}
-            color={colors.primary}
-          />
+          <Ionicons name="person-circle-outline" size={30} color={colors.primary} />
         </View>
         <Text style={[styles.formTitle, { color: colors.foreground }]}>
           Como podemos chamar você?
         </Text>
-        <Text
-          style={[styles.formDescription, { color: colors.mutedForeground }]}
-        >
-          Este é o seu perfil de quem está cuidando. Depois, você poderá
-          cadastrar o familiar que deseja acompanhar.
+        <Text style={[styles.formDescription, { color: colors.mutedForeground }]}>
+          Este é o seu perfil de quem está cuidando. Depois, você poderá cadastrar o familiar que deseja acompanhar.
         </Text>
 
         <View style={styles.formFields}>
@@ -325,11 +291,7 @@ function CaregiverForm({
             returnKeyType="done"
             style={[
               styles.input,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.input,
-                color: colors.foreground,
-              },
+              { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground },
             ]}
             testID="caregiver-name-input"
             value={name}
@@ -338,16 +300,8 @@ function CaregiverForm({
 
         {error ? (
           <View style={[styles.errorBox, { backgroundColor: colors.accent }]}>
-            <Ionicons
-              name="alert-circle-outline"
-              size={20}
-              color={colors.accentForeground}
-            />
-            <Text
-              style={[styles.errorText, { color: colors.accentForeground }]}
-            >
-              {error}
-            </Text>
+            <Ionicons name="alert-circle-outline" size={20} color={colors.accentForeground} />
+            <Text style={[styles.errorText, { color: colors.accentForeground }]}>{error}</Text>
           </View>
         ) : null}
 
@@ -359,14 +313,8 @@ function CaregiverForm({
             testID="caregiver-save"
           />
           <View style={styles.privacyNote}>
-            <Ionicons
-              name="lock-closed-outline"
-              size={16}
-              color={colors.primary}
-            />
-            <Text
-              style={[styles.privacyText, { color: colors.mutedForeground }]}
-            >
+            <Ionicons name="lock-closed-outline" size={16} color={colors.primary} />
+            <Text style={[styles.privacyText, { color: colors.mutedForeground }]}>
               Seu nome fica somente neste aparelho
             </Text>
           </View>
@@ -385,8 +333,8 @@ function PatientForm({
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [name, setName] = useState("");
-  const [birthDate, setBirthDate] = useState("");
+  const [name, setName] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -395,13 +343,13 @@ function PatientForm({
     setError(null);
 
     if (name.trim().length < 2) {
-      setError("Informe o nome do familiar para continuar.");
+      setError('Informe o nome do familiar para continuar.');
       return;
     }
 
     const civilDate = birthDate.trim() ? parseCivilDate(birthDate) : null;
     if (birthDate.trim() && !civilDate) {
-      setError("Informe uma data de nascimento válida no formato DD/MM/AAAA.");
+      setError('Informe uma data de nascimento válida no formato DD/MM/AAAA.');
       return;
     }
 
@@ -409,7 +357,7 @@ function PatientForm({
     try {
       await onSaved(name.trim(), civilDate);
     } catch {
-      setError("Não foi possível salvar agora. Tente novamente.");
+      setError('Não foi possível salvar agora. Tente novamente.');
     } finally {
       setIsSaving(false);
     }
@@ -448,11 +396,9 @@ function PatientForm({
         <Text style={[styles.formTitle, { color: colors.foreground }]}>
           Quem você quer acompanhar?
         </Text>
-        <Text
-          style={[styles.formDescription, { color: colors.mutedForeground }]}
-        >
-          Cadastre um familiar para começar. Você poderá completar outras
-          informações depois.
+        <Text style={[styles.formDescription, { color: colors.mutedForeground }]}>
+          Cadastre um familiar para começar. Você poderá completar outras informações
+          depois.
         </Text>
 
         <View style={styles.formFields}>
@@ -467,11 +413,7 @@ function PatientForm({
             returnKeyType="next"
             style={[
               styles.input,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.input,
-                color: colors.foreground,
-              },
+              { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground },
             ]}
             testID="patient-name-input"
             value={name}
@@ -487,11 +429,7 @@ function PatientForm({
             placeholderTextColor={colors.mutedForeground}
             style={[
               styles.input,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.input,
-                color: colors.foreground,
-              },
+              { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground },
             ]}
             testID="patient-birth-date-input"
             value={birthDate}
@@ -503,16 +441,8 @@ function PatientForm({
 
         {error ? (
           <View style={[styles.errorBox, { backgroundColor: colors.accent }]}>
-            <Ionicons
-              name="alert-circle-outline"
-              size={20}
-              color={colors.accentForeground}
-            />
-            <Text
-              style={[styles.errorText, { color: colors.accentForeground }]}
-            >
-              {error}
-            </Text>
+            <Ionicons name="alert-circle-outline" size={20} color={colors.accentForeground} />
+            <Text style={[styles.errorText, { color: colors.accentForeground }]}>{error}</Text>
           </View>
         ) : null}
 
@@ -524,14 +454,8 @@ function PatientForm({
             testID="patient-save"
           />
           <View style={styles.privacyNote}>
-            <Ionicons
-              name="lock-closed-outline"
-              size={16}
-              color={colors.primary}
-            />
-            <Text
-              style={[styles.privacyText, { color: colors.mutedForeground }]}
-            >
+            <Ionicons name="lock-closed-outline" size={16} color={colors.primary} />
+            <Text style={[styles.privacyText, { color: colors.mutedForeground }]}>
               Salvo somente neste aparelho
             </Text>
           </View>
@@ -541,13 +465,7 @@ function PatientForm({
   );
 }
 
-function FieldLabel({
-  label,
-  required,
-}: {
-  label: string;
-  required?: boolean;
-}) {
+function FieldLabel({ label, required }: { label: string; required?: boolean }) {
   const colors = useColors();
 
   return (
@@ -558,13 +476,7 @@ function FieldLabel({
   );
 }
 
-function HomeScreen({
-  caregiver,
-  patient,
-}: {
-  caregiver: Caregiver;
-  patient: Patient;
-}) {
+function HomeScreen({ caregiver, patient }: { caregiver: Caregiver; patient: Patient }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
@@ -580,26 +492,16 @@ function HomeScreen({
       >
         <View style={styles.homeHeader}>
           <View style={styles.homeHeaderCopy}>
-            <Text style={[styles.homeEyebrow, { color: colors.primary }]}>
-              SEU ESPAÇO
-            </Text>
+            <Text style={[styles.homeEyebrow, { color: colors.primary }]}>SEU ESPAÇO</Text>
             <Text style={[styles.homeTitle, { color: colors.foreground }]}>
               Olá, {firstNameOf(caregiver.name)}.
             </Text>
-            <Text
-              style={[styles.homeSubtitle, { color: colors.mutedForeground }]}
-            >
+            <Text style={[styles.homeSubtitle, { color: colors.mutedForeground }]}>
               Você está acompanhando {patient.name}.
             </Text>
           </View>
-          <View
-            style={[styles.homeAvatar, { backgroundColor: colors.primary }]}
-          >
-            <Ionicons
-              name="person"
-              size={25}
-              color={colors.primaryForeground}
-            />
+          <View style={[styles.homeAvatar, { backgroundColor: colors.primary }]}>
+            <Ionicons name="person" size={25} color={colors.primaryForeground} />
           </View>
         </View>
 
@@ -612,58 +514,33 @@ function HomeScreen({
           ]}
         >
           <View style={[styles.readyIcon, { backgroundColor: colors.accent }]}>
-            <Ionicons
-              name="checkmark-circle"
-              size={28}
-              color={colors.accentForeground}
-            />
+            <Ionicons name="checkmark-circle" size={28} color={colors.accentForeground} />
           </View>
           <Text style={[styles.readyTitle, { color: colors.foreground }]}>
             Cadastro concluído
           </Text>
-          <Text
-            style={[styles.readyDescription, { color: colors.mutedForeground }]}
-          >
+          <Text style={[styles.readyDescription, { color: colors.mutedForeground }]}>
             {patient.name} já está pronto para ser acompanhado.
           </Text>
-          <View
-            style={[styles.patientSummary, { borderTopColor: colors.border }]}
-          >
-            <Ionicons
-              name="calendar-outline"
-              size={18}
-              color={colors.primary}
-            />
-            <Text
-              style={[styles.patientSummaryText, { color: colors.foreground }]}
-            >
+          <View style={[styles.patientSummary, { borderTopColor: colors.border }]}>
+            <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+            <Text style={[styles.patientSummaryText, { color: colors.foreground }]}>
               {patient.birthDate
                 ? `Nascimento: ${formatCivilDate(patient.birthDate)}`
-                : "Data de nascimento não informada"}
+                : 'Data de nascimento não informada'}
             </Text>
           </View>
         </View>
 
         <View style={[styles.infoCard, { backgroundColor: colors.secondary }]}>
-          <Ionicons
-            name="shield-checkmark-outline"
-            size={22}
-            color={colors.primary}
-          />
+          <Ionicons name="shield-checkmark-outline" size={22} color={colors.primary} />
           <View style={styles.infoCopy}>
-            <Text
-              style={[styles.infoTitle, { color: colors.secondaryForeground }]}
-            >
+            <Text style={[styles.infoTitle, { color: colors.secondaryForeground }]}>
               Dados somente neste aparelho
             </Text>
-            <Text
-              style={[
-                styles.infoDescription,
-                { color: colors.mutedForeground },
-              ]}
-            >
-              Nesta primeira versão, nada é enviado para a Internet. Você pode
-              continuar usando o aplicativo mesmo sem conexão.
+            <Text style={[styles.infoDescription, { color: colors.mutedForeground }]}>
+              Nesta primeira versão, nada é enviado para a Internet. Você pode continuar
+              usando o aplicativo mesmo sem conexão.
             </Text>
           </View>
         </View>
@@ -684,19 +561,11 @@ function DatabaseErrorScreen({ onRetry }: { onRetry: () => void }) {
     <View
       style={[
         styles.centeredPage,
-        {
-          backgroundColor: colors.background,
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom,
-        },
+        { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom },
       ]}
     >
       <View style={[styles.errorPageIcon, { backgroundColor: colors.accent }]}>
-        <Ionicons
-          name="refresh-outline"
-          size={32}
-          color={colors.accentForeground}
-        />
+        <Ionicons name="refresh-outline" size={32} color={colors.accentForeground} />
       </View>
       <Text style={[styles.errorPageTitle, { color: colors.foreground }]}>
         Não conseguimos abrir o app
@@ -714,24 +583,21 @@ function DatabaseErrorScreen({ onRetry }: { onRetry: () => void }) {
         ]}
         testID="database-retry"
       >
-        <Text style={[styles.retryText, { color: colors.primaryForeground }]}>
-          Tentar novamente
-        </Text>
+        <Text style={[styles.retryText, { color: colors.primaryForeground }]}>Tentar novamente</Text>
       </Pressable>
     </View>
   );
 }
 
 export default function IndexScreen() {
-  const { status, caregiver, patient, createCaregiver, createPatient, retry } =
-    useLocalData();
-  const [step, setStep] = useState<OnboardingStep>("welcome");
+  const { status, caregiver, patient, createCaregiver, createPatient, retry } = useLocalData();
+  const [step, setStep] = useState<OnboardingStep>('welcome');
 
-  if (status === "loading") {
+  if (status === 'loading') {
     return <LoadingScreen />;
   }
 
-  if (status === "error") {
+  if (status === 'error') {
     return <DatabaseErrorScreen onRetry={() => void retry()} />;
   }
 
@@ -740,13 +606,13 @@ export default function IndexScreen() {
   }
 
   if (!caregiver) {
-    if (step === "welcome") {
-      return <WelcomeScreen onStart={() => setStep("caregiver-form")} />;
+    if (step === 'welcome') {
+      return <WelcomeScreen onStart={() => setStep('caregiver-form')} />;
     }
 
     return (
       <CaregiverForm
-        onBack={() => setStep("welcome")}
+        onBack={() => setStep('welcome')}
         onSaved={async (name) => {
           await createCaregiver({ name });
         }}
@@ -771,11 +637,7 @@ function LoadingScreen() {
     <View
       style={[
         styles.centeredPage,
-        {
-          backgroundColor: colors.background,
-          paddingTop: insets.top,
-          paddingBottom: insets.bottom,
-        },
+        { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom },
       ]}
     >
       <ActivityIndicator color={colors.primary} size="large" />
@@ -790,74 +652,47 @@ const styles = StyleSheet.create({
   page: { flex: 1 },
   centeredPage: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingHorizontal: 28,
   },
   welcomeContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    justifyContent: "space-between",
+    justifyContent: 'space-between',
   },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   logo: { width: 48, height: 48, borderRadius: 14 },
-  brandName: { fontSize: 17, fontFamily: "Inter_700Bold" },
-  brandCaption: { fontSize: 12, fontFamily: "Inter_500Medium", marginTop: 2 },
+  brandName: { fontSize: 17, fontFamily: 'Inter_700Bold' },
+  brandCaption: { fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 2 },
   welcomeHero: { marginTop: 42 },
   heroIcon: {
     width: 76,
     height: 76,
     borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 26,
   },
-  eyebrow: {
-    fontSize: 12,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: 1.3,
-    marginBottom: 12,
-  },
-  welcomeTitle: {
-    fontSize: 34,
-    lineHeight: 40,
-    fontFamily: "Inter_700Bold",
-    maxWidth: 350,
-  },
-  welcomeDescription: {
-    fontSize: 17,
-    lineHeight: 25,
-    fontFamily: "Inter_400Regular",
-    marginTop: 18,
-    maxWidth: 350,
-  },
+  eyebrow: { fontSize: 12, fontFamily: 'Inter_700Bold', letterSpacing: 1.3, marginBottom: 12 },
+  welcomeTitle: { fontSize: 34, lineHeight: 40, fontFamily: 'Inter_700Bold', maxWidth: 350 },
+  welcomeDescription: { fontSize: 17, lineHeight: 25, fontFamily: 'Inter_400Regular', marginTop: 18, maxWidth: 350 },
   promiseList: { gap: 14, marginTop: 32 },
-  promiseRow: { flexDirection: "row", alignItems: "center", gap: 13 },
-  promiseIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  promiseText: { fontSize: 15, fontFamily: "Inter_500Medium", flex: 1 },
+  promiseRow: { flexDirection: 'row', alignItems: 'center', gap: 13 },
+  promiseIcon: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  promiseText: { fontSize: 15, fontFamily: 'Inter_500Medium', flex: 1 },
   welcomeAction: { marginTop: 38 },
-  actionHint: {
-    fontSize: 13,
-    textAlign: "center",
-    fontFamily: "Inter_400Regular",
-    marginTop: 12,
-  },
+  actionHint: { fontSize: 13, textAlign: 'center', fontFamily: 'Inter_400Regular', marginTop: 12 },
   primaryButton: {
     minHeight: 58,
     borderRadius: 18,
     paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
   },
-  primaryButtonText: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  primaryButtonText: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   pressed: { opacity: 0.78 },
   formContent: { flexGrow: 1, paddingHorizontal: 24 },
   backButton: {
@@ -865,180 +700,53 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 16,
     borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 30,
   },
-  formIcon: {
-    width: 58,
-    height: 58,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 20,
-  },
-  formTitle: { fontSize: 30, lineHeight: 36, fontFamily: "Inter_700Bold" },
-  formDescription: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontFamily: "Inter_400Regular",
-    marginTop: 12,
-    maxWidth: 350,
-  },
+  formIcon: { width: 58, height: 58, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  formTitle: { fontSize: 30, lineHeight: 36, fontFamily: 'Inter_700Bold' },
+  formDescription: { fontSize: 16, lineHeight: 24, fontFamily: 'Inter_400Regular', marginTop: 12, maxWidth: 350 },
   formFields: { marginTop: 34, gap: 10 },
-  fieldLabel: { fontSize: 14, fontFamily: "Inter_700Bold", marginTop: 6 },
+  fieldLabel: { fontSize: 14, fontFamily: 'Inter_700Bold', marginTop: 6 },
   input: {
     minHeight: 56,
     borderRadius: 16,
     borderWidth: 1,
     paddingHorizontal: 16,
     fontSize: 16,
-    fontFamily: "Inter_500Medium",
+    fontFamily: 'Inter_500Medium',
   },
-  fieldHint: {
-    fontSize: 12,
-    lineHeight: 18,
-    fontFamily: "Inter_400Regular",
-    marginTop: 2,
-  },
-  errorBox: {
-    flexDirection: "row",
-    gap: 10,
-    padding: 14,
-    borderRadius: 14,
-    marginTop: 20,
-    alignItems: "flex-start",
-  },
-  errorText: {
-    flex: 1,
-    fontSize: 14,
-    lineHeight: 20,
-    fontFamily: "Inter_500Medium",
-  },
-  formAction: { marginTop: "auto", paddingTop: 34 },
-  privacyNote: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    marginTop: 14,
-  },
-  privacyText: { fontSize: 12, fontFamily: "Inter_500Medium" },
-  localBadge: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 22,
-  },
-  localBadgeText: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  fieldHint: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  errorBox: { flexDirection: 'row', gap: 10, padding: 14, borderRadius: 14, marginTop: 20, alignItems: 'flex-start' },
+  errorText: { flex: 1, fontSize: 14, lineHeight: 20, fontFamily: 'Inter_500Medium' },
+  formAction: { marginTop: 'auto', paddingTop: 34 },
+  privacyNote: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 14 },
+  privacyText: { fontSize: 12, fontFamily: 'Inter_500Medium' },
+  localBadge: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, marginTop: 22 },
+  localBadgeText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   homeContent: { paddingHorizontal: 24 },
-  homeHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
+  homeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   homeHeaderCopy: { flex: 1, paddingRight: 14 },
-  homeEyebrow: {
-    fontSize: 12,
-    letterSpacing: 1.3,
-    fontFamily: "Inter_700Bold",
-    marginBottom: 8,
-  },
-  homeTitle: { fontSize: 30, lineHeight: 36, fontFamily: "Inter_700Bold" },
-  homeSubtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontFamily: "Inter_400Regular",
-    marginTop: 6,
-  },
-  homeAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  homeEyebrow: { fontSize: 12, letterSpacing: 1.3, fontFamily: 'Inter_700Bold', marginBottom: 8 },
+  homeTitle: { fontSize: 30, lineHeight: 36, fontFamily: 'Inter_700Bold' },
+  homeSubtitle: { fontSize: 15, lineHeight: 22, fontFamily: 'Inter_400Regular', marginTop: 6 },
+  homeAvatar: { width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   readyCard: { borderWidth: 1, borderRadius: 24, padding: 22, marginTop: 28 },
-  readyIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 18,
-  },
-  readyTitle: { fontSize: 21, fontFamily: "Inter_700Bold" },
-  readyDescription: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontFamily: "Inter_400Regular",
-    marginTop: 7,
-  },
-  patientSummary: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    borderTopWidth: 1,
-    paddingTop: 16,
-    marginTop: 20,
-  },
-  patientSummaryText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
-  infoCard: {
-    flexDirection: "row",
-    gap: 13,
-    borderRadius: 20,
-    padding: 18,
-    marginTop: 16,
-    alignItems: "flex-start",
-  },
+  readyIcon: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
+  readyTitle: { fontSize: 21, fontFamily: 'Inter_700Bold' },
+  readyDescription: { fontSize: 15, lineHeight: 22, fontFamily: 'Inter_400Regular', marginTop: 7 },
+  patientSummary: { flexDirection: 'row', alignItems: 'center', gap: 9, borderTopWidth: 1, paddingTop: 16, marginTop: 20 },
+  patientSummaryText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  infoCard: { flexDirection: 'row', gap: 13, borderRadius: 20, padding: 18, marginTop: 16, alignItems: 'flex-start' },
   infoCopy: { flex: 1 },
-  infoTitle: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  infoDescription: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontFamily: "Inter_400Regular",
-    marginTop: 5,
-  },
-  homeFooter: {
-    textAlign: "center",
-    fontSize: 12,
-    fontFamily: "Inter_500Medium",
-    marginTop: 32,
-  },
-  errorPageIcon: {
-    width: 70,
-    height: 70,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 20,
-  },
-  errorPageTitle: {
-    fontSize: 22,
-    textAlign: "center",
-    fontFamily: "Inter_700Bold",
-  },
-  errorPageText: {
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: "center",
-    fontFamily: "Inter_400Regular",
-    marginTop: 10,
-    maxWidth: 300,
-  },
-  retryButton: {
-    borderRadius: 16,
-    minHeight: 52,
-    paddingHorizontal: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 24,
-  },
-  retryText: { fontSize: 15, fontFamily: "Inter_700Bold" },
-  loadingText: { fontSize: 14, fontFamily: "Inter_500Medium", marginTop: 14 },
+  infoTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  infoDescription: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_400Regular', marginTop: 5 },
+  homeFooter: { textAlign: 'center', fontSize: 12, fontFamily: 'Inter_500Medium', marginTop: 32 },
+  errorPageIcon: { width: 70, height: 70, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  errorPageTitle: { fontSize: 22, textAlign: 'center', fontFamily: 'Inter_700Bold' },
+  errorPageText: { fontSize: 15, lineHeight: 22, textAlign: 'center', fontFamily: 'Inter_400Regular', marginTop: 10, maxWidth: 300 },
+  retryButton: { borderRadius: 16, minHeight: 52, paddingHorizontal: 22, alignItems: 'center', justifyContent: 'center', marginTop: 24 },
+  retryText: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  loadingText: { fontSize: 14, fontFamily: 'Inter_500Medium', marginTop: 14 },
 });
