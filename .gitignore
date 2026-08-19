@@ -47,3 +47,17 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Replit workspace artifacts
+.agents/
+attached_assets/
+.replit
+.replitignore
+replit.md
+
+# Generated/local assets
+artifacts/*/node_modules/
+attached_assets/generated_images/
+
+# Replit artifact metadata
+artifacts/*/.replit-artifact/
