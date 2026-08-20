@@ -74,7 +74,7 @@ O avatar opcional do Caregiver permanece modelado, mas ainda não possui interfa
 
 A rota principal concentra onboarding, Home e gerenciamento de familiares; essa decisão reduz o risco nesta janela, mas aumenta o tamanho do arquivo e deverá ser revisitada quando os módulos clínicos forem adicionados.
 
-A preferência do Patient ativo usa AsyncStorage para estado de interface. O registro clínico continua no SQLite, mas ainda não existe uma camada de preferências SQLite compartilhada entre dispositivos — o que é aceitável enquanto o produto permanece Local-Only.
+A preferência do Patient ativo permanece no AsyncStorage, fora do SQLite. O registro clínico continua no SQLite, mas a seleção ativa não acompanha eventual backup ou exportação que contenha apenas o banco SQLite — o que é aceitável enquanto o produto permanece Local-Only.
 
 A exportação web pode depender do artefato WASM do `expo-sqlite` disponível no ambiente de bundling. O workflow obrigatório atual valida typecheck e configuração Expo; a execução Android permanece o caminho principal do aplicativo.
 

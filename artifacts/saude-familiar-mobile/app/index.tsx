@@ -579,6 +579,7 @@ function PatientsScreen({
               <Pressable
                 accessibilityLabel={`Selecionar ${item.name}`}
                 accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
                 onPress={() => onSelect(item)}
                 style={({ pressed }) => [
                   styles.patientCardContent,
@@ -856,7 +857,14 @@ export default function IndexScreen() {
           text: 'Excluir',
           style: 'destructive',
           onPress: () => {
-            void deletePatient(patientToDelete.id).then(() => setPatientView('home'));
+            void deletePatient(patientToDelete.id)
+              .then(() => setPatientView('home'))
+              .catch((error: unknown) => {
+                Alert.alert(
+                  'Não foi possível concluir',
+                  error instanceof Error ? error.message : 'Tente novamente.',
+                );
+              });
           },
         },
       ],
@@ -933,7 +941,14 @@ export default function IndexScreen() {
           setPatientView('edit');
         }}
         onSelect={(patientToSelect) => {
-          void selectPatient(patientToSelect.id).then(() => setPatientView('home'));
+          void selectPatient(patientToSelect.id)
+            .then(() => setPatientView('home'))
+            .catch((error: unknown) => {
+              Alert.alert(
+                'Não foi possível selecionar',
+                error instanceof Error ? error.message : 'Tente novamente.',
+              );
+            });
         }}
         patients={patients}
       />
@@ -1031,7 +1046,7 @@ const styles = StyleSheet.create({
   patientCardMeta: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_400Regular', marginTop: 3 },
   patientCardNotes: { fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular', marginTop: 3 },
   patientActions: { flexDirection: 'row', borderTopWidth: 1, paddingHorizontal: 12 },
-  patientAction: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 12 },
+  patientAction: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 12 },
   patientActionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   emptyPatients: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 44 },
   emptyPatientsTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', marginTop: 14, textAlign: 'center' },

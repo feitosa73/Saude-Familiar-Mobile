@@ -32,6 +32,19 @@ type LocalDataContextValue = {
 const LocalDataContext = createContext<LocalDataContextValue | null>(null);
 const ACTIVE_PATIENT_STORAGE_KEY = 'saude-familiar.active-patient-id';
 
+async function persistActivePatientId(id: string | null): Promise<boolean> {
+  try {
+    if (id) {
+      await AsyncStorage.setItem(ACTIVE_PATIENT_STORAGE_KEY, id);
+    } else {
+      await AsyncStorage.removeItem(ACTIVE_PATIENT_STORAGE_KEY);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function LocalDataProvider({ children }: { children: React.ReactNode }) {
   const database = useSQLiteContext();
   const caregiverRepository = useMemo(
@@ -104,12 +117,12 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
         const createdPatient = await patientRepository.create(input);
         setPatients((currentPatients) => [...currentPatients, createdPatient]);
         setPatient(createdPatient);
-        try {
-          await AsyncStorage.setItem(ACTIVE_PATIENT_STORAGE_KEY, createdPatient.id);
-        } catch {
-          // The patient remains persisted even if the active selection cannot be cached.
-        }
-        setError(null);
+        const activePatientPersisted = await persistActivePatientId(createdPatient.id);
+        setError(
+          activePatientPersisted
+            ? null
+            : 'Familiar salvo, mas a seleção não será lembrada ao reabrir o aplicativo.',
+        );
         setStatus('ready');
         return createdPatient;
       } catch {
@@ -128,8 +141,12 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Familiar não encontrado.');
       }
 
+      const activePatientPersisted = await persistActivePatientId(selectedPatient.id);
+      if (!activePatientPersisted) {
+        throw new Error('Não foi possível guardar a seleção deste familiar. Tente novamente.');
+      }
+
       setPatient(selectedPatient);
-      await AsyncStorage.setItem(ACTIVE_PATIENT_STORAGE_KEY, selectedPatient.id);
     },
     [patientRepository],
   );
@@ -157,10 +174,11 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       if (patient?.id === id) {
         const nextPatient = remainingPatients[0] ?? null;
         setPatient(nextPatient);
-        if (nextPatient) {
-          await AsyncStorage.setItem(ACTIVE_PATIENT_STORAGE_KEY, nextPatient.id);
-        } else {
-          await AsyncStorage.removeItem(ACTIVE_PATIENT_STORAGE_KEY);
+        const activePatientPersisted = await persistActivePatientId(nextPatient?.id ?? null);
+        if (!activePatientPersisted) {
+          throw new Error(
+            'Familiar excluído, mas não foi possível guardar o próximo selecionado. Tente novamente.',
+          );
         }
       }
     },
