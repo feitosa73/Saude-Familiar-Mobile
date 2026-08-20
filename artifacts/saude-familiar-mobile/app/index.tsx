@@ -989,8 +989,8 @@ function ConsultationForm({
                   <Pressable
                     key={option.label}
                     accessibilityLabel={option.label}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: isSelected }}
                     onPress={() => toggleScheduledOffset(option.offset)}
                     style={({ pressed }) => [
                       styles.reminderOption,
@@ -1008,8 +1008,8 @@ function ConsultationForm({
               })}
               <Pressable
                 accessibilityLabel="Antecedência personalizada"
-                accessibilityRole="button"
-                accessibilityState={{ selected: customScheduledEnabled }}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: customScheduledEnabled }}
                 onPress={() => setCustomScheduledEnabled((current) => !current)}
                 style={({ pressed }) => [
                   styles.reminderOption,

@@ -351,8 +351,15 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
           skipCancellation: true,
         });
       } catch {
+        await Promise.all(
+          existingReminders.map((reminder) =>
+            reminder.notificationId
+              ? reminderRepository.update(reminder.id, { notificationId: null }).catch(() => undefined)
+              : undefined,
+          ),
+        );
         reminderResult = {
-          reminders: existingReminders,
+          reminders: existingReminders.map((reminder) => ({ ...reminder, notificationId: null })),
           warning: 'Consulta atualizada, mas não foi possível atualizar os lembretes. Tente novamente.',
         };
       }

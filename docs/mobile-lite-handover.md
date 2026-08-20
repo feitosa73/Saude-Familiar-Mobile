@@ -26,7 +26,7 @@ As Sprints 1 e 2 mantêm o fluxo em `app/index.tsx` para evitar uma refatoraçã
 
 `Caregiver` representa a pessoa que utiliza o aplicativo e permanece limitada a um registro local por aparelho. `Patient` representa cada familiar ou pessoa acompanhada. A tabela `patients` não possui restrição de registro único e está preparada para múltiplos registros.
 
-No PR 1, `Patient` mantém os campos existentes de identificação, data de nascimento, informações clínicas legadas e timestamps. O cadastro e a edição passam a aceitar também `notes`, uma observação opcional de texto simples.
+No Sprint 1, `Patient` mantém os campos existentes de identificação, data de nascimento, informações clínicas legadas e timestamps. O cadastro e a edição passam a aceitar também `notes`, uma observação opcional de texto simples.
 
 As operações locais de Patient são `list`, `getFirst`, `getById`, `create`, `update` e `delete`. A seleção do Patient ativo é uma preferência de interface, armazenada localmente sob a chave `saude-familiar.active-patient-id`, sem alterar a cardinalidade do banco. `Consultation` representa uma consulta vinculada obrigatoriamente a um `patientId`, com status `pending`, `scheduled`, `completed` ou `cancelled`, e data/hora opcionais. `Reminder` representa zero ou mais lembretes locais vinculados obrigatoriamente a uma Consultation, com tipo `consultation_advance` ou `scheduling_task`, `triggerAt`, antecedência opcional e o `notificationId` devolvido pelo Android.
 
@@ -45,11 +45,11 @@ A tabela `caregivers` contém `id`, `name`, `photo_uri`, `created_at` e `updated
 | 5 | Cria `consultations` (`id`, `patient_id`, `specialty`, `professional_name`, `location`, `phone`, `date`, `time`, `notes`, `status`, `created_at`, `updated_at`), aplica `CHECK` para os quatro status e cria `consultations_patient_idx` em `(patient_id, status, date, time)`; execução transacional e idempotente, sem foreign key | Sim |
 | 6 | Cria `reminders` (`id`, `consultation_id`, `type`, `trigger_at`, `offset_value`, `offset_unit`, `notification_id`, `created_at`, `updated_at`), aplica `CHECK` para os tipos e unidades e cria índices por Consultation e `trigger_at`; execução transacional e idempotente, sem foreign key | Sim |
 
-O PR 1 não precisou de migration de schema para permitir múltiplos Patients, porque a tabela já aceita vários registros e a coluna `notes` já existia no schema. A Sprint 2 adiciona a migration 5 de Consultations de forma incremental, idempotente e transacional, sem foreign key destrutiva. A Sprint 3 adiciona a migration 6 de Reminders pelo mesmo padrão. Quando o usuário confirma a exclusão explícita de um Patient, as notificações locais relacionadas são canceladas antes da remoção e seus Reminders e Consultations são removidos na mesma transação SQLite, evitando registros órfãos sem cascade silenciosa. Medicamentos e Exames deverão criar suas próprias migrations futuras.
+O Sprint 1 não precisou de migration de schema para permitir múltiplos Patients, porque a tabela já aceita vários registros e a coluna `notes` já existia no schema. A Sprint 2 adiciona a migration 5 de Consultations de forma incremental, idempotente e transacional, sem foreign key destrutiva. A Sprint 3 adiciona a migration 6 de Reminders pelo mesmo padrão. Quando o usuário confirma a exclusão explícita de um Patient, as notificações locais relacionadas são canceladas antes da remoção e seus Reminders e Consultations são removidos na mesma transação SQLite, evitando registros órfãos sem cascade silenciosa. Medicamentos e Exames deverão criar suas próprias migrations futuras.
 
 ## 5. Repositories
 
-`SQLitePatientRepository` converte as colunas snake_case do SQLite para o domínio camelCase. A listagem ordena os registros por `created_at`, a seleção usa o `id`, a edição atualiza somente os campos básicos previstos pelo PR 1 e a exclusão remove o registro após confirmação na interface. `SQLiteConsultationRepository` expõe `listByPatient`, `getById`, `create`, `update` e `delete`, sempre filtrando por `patientId` no carregamento do familiar ativo; a exclusão também remove os Reminders vinculados. `SQLiteReminderRepository` expõe listagem por Consultation, criação, atualização de `notificationId`, exclusão individual, exclusão por Consultation e `replaceForConsultation` transacional.
+`SQLitePatientRepository` converte as colunas snake_case do SQLite para o domínio camelCase. A listagem ordena os registros por `created_at`, a seleção usa o `id`, a edição atualiza somente os campos básicos previstos pelo Sprint 1 e a exclusão remove o registro após confirmação na interface. `SQLiteConsultationRepository` expõe `listByPatient`, `getById`, `create`, `update` e `delete`, sempre filtrando por `patientId` no carregamento do familiar ativo; a exclusão também remove os Reminders vinculados. `SQLiteReminderRepository` expõe listagem por Consultation, criação, atualização de `notificationId`, exclusão individual, exclusão por Consultation e `replaceForConsultation` transacional.
 
 A Sprint 2 é o primeiro módulo clínico local e não implementa Medicamentos, Exames ou Documentos/Receitas. Esses módulos deverão possuir entidades, repositories e migrations próprias, sempre com vínculo lógico obrigatório a `patientId`.
 
@@ -84,13 +84,13 @@ A exportação web pode depender do artefato WASM do `expo-sqlite` disponível n
 
 ## 10. Backlog recomendado
 
-| Próxima etapa | Conteúdo |
+| Sprint | Conteúdo |
 |---|---|
-| PR 2 | Concluído: Consultas locais por Patient, incluindo `A agendar` sem data/hora obrigatória |
-| PR 3 | Em andamento nesta branch: lembretes locais de Consultations com `expo-notifications` |
-| PR 4 | Medicamentos por Patient, sem catálogo ANVISA e sem OCR |
-| PR 5 | Exames por Patient, incluindo status `A agendar` sem data/hora obrigatória |
-| PR 6 | Documentos/Receitas locais somente quando o fluxo completo de importação, OCR, conferência e aprovação estiver disponível |
+| Sprint 2 | Concluído: Consultas locais por Patient, incluindo `A agendar` sem data/hora obrigatória |
+| Sprint 3 | Em andamento nesta branch: lembretes locais de Consultations com `expo-notifications` |
+| Sprint 4 | Medicamentos por Patient, sem catálogo ANVISA e sem OCR |
+| Sprint 5 | Exames por Patient, incluindo status `A agendar` sem data/hora obrigatória |
+| Sprint 6 | Documentos/Receitas locais somente quando o fluxo completo de importação, OCR, conferência e aprovação estiver disponível |
 | Evolução posterior | Rotas separadas, relacionamento clínico explícito, testes instrumentados no Android e canais futuros como WhatsApp, SMS e e-mail |
 
 ## 11. Instruções para continuidade
@@ -113,10 +113,10 @@ pnpm exec expo start --android
 
 O workflow `Validate Mobile` roda em Pull Requests e em pushes para `main`. Ele instala as dependências com `pnpm install --frozen-lockfile --ignore-scripts`, executa o typecheck do workspace e valida a configuração Expo. O workflow `Build installable APK` é disparado manualmente, em Pull Requests e em pushes para `main`; ele configura Node 22, pnpm 11.22, Java 17, executa `expo prebuild --platform android --no-install --clean`, gera `assembleRelease` e publica o APK com checksum por 14 dias.
 
-Não há atualmente configuração de Firebase App Distribution no repositório. Se essa distribuição for necessária futuramente, deverá ser tratada como mudança de infraestrutura separada, com credenciais protegidas e autorização explícita; não deve ser introduzida no PR 1.
+Não há atualmente configuração de Firebase App Distribution no repositório. Se essa distribuição for necessária futuramente, deverá ser tratada como mudança de infraestrutura separada, com credenciais protegidas e autorização explícita; não deve ser introduzida no Sprint 1.
 
 ## 12. Pontos que ainda precisam de testes
 
-Os testes funcionais prioritários do PR 1 são: primeira execução; atualização de uma instalação que já possui Caregiver e Patient; persistência após fechar e reabrir; criação de múltiplos Patients; alternância do Patient ativo; garantia de que dados de um Patient não aparecem em outro; edição de dados; exclusão com confirmação; exclusão do Patient ativo; e retorno ao cadastro quando não houver Patients restantes.
+Os testes funcionais prioritários do Sprint 1 são: primeira execução; atualização de uma instalação que já possui Caregiver e Patient; persistência após fechar e reabrir; criação de múltiplos Patients; alternância do Patient ativo; garantia de que dados de um Patient não aparecem em outro; edição de dados; exclusão com confirmação; exclusão do Patient ativo; e retorno ao cadastro quando não houver Patients restantes.
 
 A Sprint 2 deve ser validada com criação de consulta `A agendar` sem data/hora, persistência após reabertura, edição para `Agendada` com data/hora, isolamento ao trocar Patient, criação para um segundo familiar, mudança para `Realizada` no histórico, exclusão confirmada e resumo correto na Home. Os próximos PRs deverão acrescentar testes para medicamentos, exames e documentos vinculados ao Patient correto. Além dos testes atuais de typecheck, configuração Expo e workflows GitHub Actions, a Sprint 3 valida cenários puros de planejamento: `A agendar` sem lembrete, `A agendar` com data escolhida, múltiplas antecedências, trigger passado e status concluído/cancelado. A confirmação de disparo visual deve ser feita manualmente em APK instalado, com o app em background, quando houver aparelho Android disponível.

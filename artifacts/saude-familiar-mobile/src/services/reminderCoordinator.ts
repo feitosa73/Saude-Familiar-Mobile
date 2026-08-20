@@ -93,6 +93,10 @@ export async function syncConsultationReminders(input: {
     permissionGranted = await requestLocalNotificationPermission();
   } catch {
     warnings.push('A consulta foi salva, mas não foi possível solicitar a permissão de notificações.');
+    return {
+      reminders: persistedReminders,
+      warning: warnings.join(' '),
+    };
   }
 
   if (!permissionGranted) {
