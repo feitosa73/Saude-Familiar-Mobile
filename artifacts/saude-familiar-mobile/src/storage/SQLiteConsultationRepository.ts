@@ -100,8 +100,16 @@ export class SQLiteConsultationRepository implements ConsultationRepository {
       updatedAt: now,
     };
 
-    await withConsultationWriteLock(() =>
-      this.database.runAsync(
+    return withConsultationWriteLock(async () => {
+      const patient = await this.database.getFirstAsync<{ id: string }>(
+        'SELECT id FROM patients WHERE id = ?',
+        consultation.patientId,
+      );
+      if (!patient) {
+        throw new Error('Familiar não encontrado.');
+      }
+
+      await this.database.runAsync(
         `INSERT INTO consultations (
           id, patient_id, specialty, professional_name, location, phone,
           date, time, notes, status, created_at, updated_at
@@ -118,10 +126,9 @@ export class SQLiteConsultationRepository implements ConsultationRepository {
         consultation.status,
         consultation.createdAt,
         consultation.updatedAt,
-      ).then(() => undefined),
-    );
-
-    return consultation;
+      );
+      return consultation;
+    });
   }
 
   async update(id: string, input: UpdateConsultationInput): Promise<Consultation> {
