@@ -4,6 +4,7 @@ const INITIAL_MIGRATION = 1;
 const OPTIONAL_BIRTH_DATE_MIGRATION = 2;
 const CAREGIVER_MIGRATION = 3;
 const CAREGIVER_SINGLETON_MIGRATION = 4;
+const CONSULTATIONS_MIGRATION = 5;
 
 async function getLatestMigration(database: SQLiteDatabase): Promise<number> {
   const migration = await database.getFirstAsync<{ version: number }>(
@@ -121,6 +122,35 @@ async function enforceSingleCaregiver(database: SQLiteDatabase): Promise<void> {
   });
 }
 
+async function createConsultationsSchema(database: SQLiteDatabase): Promise<void> {
+  await database.withTransactionAsync(async () => {
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS consultations (
+        id TEXT PRIMARY KEY NOT NULL,
+        patient_id TEXT NOT NULL,
+        specialty TEXT NOT NULL,
+        professional_name TEXT,
+        location TEXT,
+        phone TEXT,
+        date TEXT,
+        time TEXT,
+        notes TEXT,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'scheduled', 'completed', 'cancelled')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS consultations_patient_idx
+        ON consultations (patient_id, status, date, time);
+    `);
+
+    await database.runAsync(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+      CONSULTATIONS_MIGRATION,
+      new Date().toISOString(),
+    );
+  });
+}
+
 export async function initializeDatabase(database: SQLiteDatabase): Promise<void> {
   await database.execAsync('PRAGMA journal_mode = WAL;');
   await database.execAsync(`
@@ -147,5 +177,9 @@ export async function initializeDatabase(database: SQLiteDatabase): Promise<void
   }
   if (currentVersion < CAREGIVER_SINGLETON_MIGRATION) {
     await enforceSingleCaregiver(database);
+    currentVersion = CAREGIVER_SINGLETON_MIGRATION;
+  }
+  if (currentVersion < CONSULTATIONS_MIGRATION) {
+    await createConsultationsSchema(database);
   }
 }

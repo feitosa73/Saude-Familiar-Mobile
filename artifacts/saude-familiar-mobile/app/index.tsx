@@ -15,12 +15,59 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import type { Caregiver } from '@/domain/caregiver';
+import type {
+  Consultation,
+  ConsultationStatus,
+  CreateConsultationInput,
+} from '@/domain/consultation';
 import type { CreatePatientInput, Patient } from '@/domain/patient';
 import { useColors } from '@/hooks/useColors';
 import { useLocalData } from '@/context/LocalDataContext';
 
 type OnboardingStep = 'welcome' | 'caregiver-form';
 type PatientView = 'home' | 'list' | 'add' | 'edit';
+type ConsultationView = 'none' | 'list' | 'add' | 'edit';
+type ConsultationFormInput = Omit<CreateConsultationInput, 'patientId'>;
+
+const CONSULTATION_STATUS_LABELS: Record<ConsultationStatus, string> = {
+  pending: 'A agendar',
+  scheduled: 'Agendada',
+  completed: 'Realizada',
+  cancelled: 'Cancelada',
+};
+
+const CONSULTATION_STATUSES: ConsultationStatus[] = [
+  'pending',
+  'scheduled',
+  'completed',
+  'cancelled',
+];
+
+function consultationStatusLabel(status: ConsultationStatus): string {
+  return CONSULTATION_STATUS_LABELS[status];
+}
+
+function consultationDateLabel(consultation: Consultation): string | null {
+  if (!consultation.date) return null;
+  const date = formatCivilDate(consultation.date);
+  return consultation.time ? `${date} às ${consultation.time}` : date;
+}
+
+function consultationSortValue(consultation: Consultation): string {
+  return `${consultation.date ?? '9999-99-99'}T${consultation.time ?? '99:99'}`;
+}
+
+function currentCivilDate(): string {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function isUpcomingConsultation(consultation: Consultation): boolean {
+  return consultation.status === 'scheduled' &&
+    (!consultation.date || consultation.date >= currentCivilDate());
+}
 
 function firstNameOf(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name;
@@ -505,6 +552,246 @@ function PatientForm({
   );
 }
 
+function ConsultationForm({
+  initialConsultation,
+  onBack,
+  onSaved,
+  title,
+  description,
+  submitLabel,
+}: {
+  initialConsultation?: Consultation | null;
+  onBack: () => void;
+  onSaved: (input: ConsultationFormInput) => Promise<void>;
+  title: string;
+  description: string;
+  submitLabel: string;
+}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const [specialty, setSpecialty] = useState(initialConsultation?.specialty ?? '');
+  const [professionalName, setProfessionalName] = useState(initialConsultation?.professionalName ?? '');
+  const [location, setLocation] = useState(initialConsultation?.location ?? '');
+  const [phone, setPhone] = useState(initialConsultation?.phone ?? '');
+  const [status, setStatus] = useState<ConsultationStatus>(initialConsultation?.status ?? 'pending');
+  const [date, setDate] = useState(
+    initialConsultation?.date ? formatCivilDate(initialConsultation.date) : '',
+  );
+  const [time, setTime] = useState(initialConsultation?.time ?? '');
+  const [notes, setNotes] = useState(initialConsultation?.notes ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  async function handleSubmit() {
+    Keyboard.dismiss();
+    setError(null);
+
+    if (specialty.trim().length < 2) {
+      setError('Informe a especialidade da consulta.');
+      return;
+    }
+
+    const civilDate = date.trim() ? parseCivilDate(date) : null;
+    if (date.trim() && !civilDate) {
+      setError('Informe uma data válida no formato DD/MM/AAAA.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onSaved({
+        specialty: specialty.trim(),
+        professionalName: professionalName.trim() || null,
+        location: location.trim() || null,
+        phone: phone.trim() || null,
+        date: civilDate,
+        time: time.trim() || null,
+        notes: notes.trim() || null,
+        status,
+      });
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a consulta.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <View style={[styles.page, { backgroundColor: colors.background }]}>
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={[
+          styles.formContent,
+          { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 28 },
+        ]}
+        bottomOffset={72}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Pressable
+          accessibilityLabel="Voltar para Consultas"
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => [
+            styles.backButton,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            pressed ? styles.pressed : null,
+          ]}
+          testID="consultation-form-back"
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+        </Pressable>
+
+        <View style={[styles.formIcon, { backgroundColor: colors.secondary }]}>
+          <Ionicons name="calendar-outline" size={30} color={colors.primary} />
+        </View>
+        <Text style={[styles.formTitle, { color: colors.foreground }]}>{title}</Text>
+        <Text style={[styles.formDescription, { color: colors.mutedForeground }]}>{description}</Text>
+
+        <View style={styles.formFields}>
+          <FieldLabel label="Especialidade" required />
+          <TextInput
+            accessibilityLabel="Especialidade da consulta"
+            autoCapitalize="words"
+            autoCorrect={false}
+            onChangeText={setSpecialty}
+            placeholder="Ex.: Cardiologista"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+            testID="consultation-specialty-input"
+            value={specialty}
+          />
+
+          <FieldLabel label="Status" required />
+          <View style={styles.consultationStatusOptions}>
+            {CONSULTATION_STATUSES.map((option) => {
+              const isSelected = option === status;
+              return (
+                <Pressable
+                  key={option}
+                  accessibilityLabel={`Status ${consultationStatusLabel(option)}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  onPress={() => setStatus(option)}
+                  style={({ pressed }) => [
+                    styles.consultationStatusOption,
+                    {
+                      backgroundColor: isSelected ? colors.primary : colors.card,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                    },
+                    pressed ? styles.pressed : null,
+                  ]}
+                  testID={`consultation-status-${option}`}
+                >
+                  <Text style={[styles.consultationStatusOptionText, { color: isSelected ? colors.primaryForeground : colors.foreground }]}>
+                    {consultationStatusLabel(option)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>
+            Em “A agendar”, data e hora podem ficar vazias e ser preenchidas depois.
+          </Text>
+
+          <FieldLabel label="Profissional" />
+          <TextInput
+            accessibilityLabel="Nome do profissional"
+            autoCapitalize="words"
+            onChangeText={setProfessionalName}
+            placeholder="Ex.: Dra. Ana Souza"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+            testID="consultation-professional-input"
+            value={professionalName}
+          />
+
+          <FieldLabel label="Local / Unidade" />
+          <TextInput
+            accessibilityLabel="Local ou unidade da consulta"
+            onChangeText={setLocation}
+            placeholder="Ex.: Clínica Central"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+            testID="consultation-location-input"
+            value={location}
+          />
+
+          <FieldLabel label="Telefone" />
+          <TextInput
+            accessibilityLabel="Telefone da consulta"
+            keyboardType="phone-pad"
+            onChangeText={setPhone}
+            placeholder="Ex.: (11) 99999-9999"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+            testID="consultation-phone-input"
+            value={phone}
+          />
+
+          <FieldLabel label="Data" />
+          <TextInput
+            accessibilityLabel="Data da consulta"
+            keyboardType="number-pad"
+            maxLength={10}
+            onChangeText={(value) => setDate(formatBirthDateInput(value))}
+            placeholder="DD/MM/AAAA"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+            testID="consultation-date-input"
+            value={date}
+          />
+
+          <FieldLabel label="Hora" />
+          <TextInput
+            accessibilityLabel="Hora da consulta"
+            keyboardType="numbers-and-punctuation"
+            maxLength={5}
+            onChangeText={setTime}
+            placeholder="HH:MM"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+            testID="consultation-time-input"
+            value={time}
+          />
+
+          <FieldLabel label="Observações" />
+          <TextInput
+            accessibilityLabel="Observações da consulta"
+            multiline
+            onChangeText={setNotes}
+            placeholder="Ex.: levar documentos ou perguntas"
+            placeholderTextColor={colors.mutedForeground}
+            style={[styles.input, styles.notesInput, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+            testID="consultation-notes-input"
+            textAlignVertical="top"
+            value={notes}
+          />
+        </View>
+
+        {error ? (
+          <View style={[styles.errorBox, { backgroundColor: colors.accent }]}>
+            <Ionicons name="alert-circle-outline" size={20} color={colors.accentForeground} />
+            <Text style={[styles.errorText, { color: colors.accentForeground }]}>{error}</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.formAction}>
+          <PrimaryButton
+            disabled={isSaving}
+            label={submitLabel}
+            onPress={() => void handleSubmit()}
+            testID="consultation-save"
+          />
+          <View style={styles.privacyNote}>
+            <Ionicons name="lock-closed-outline" size={16} color={colors.primary} />
+            <Text style={[styles.privacyText, { color: colors.mutedForeground }]}>Salvo somente neste aparelho</Text>
+          </View>
+        </View>
+      </KeyboardAwareScrollViewCompat>
+    </View>
+  );
+}
+
 function PatientsScreen({
   patients,
   activePatientId,
@@ -653,6 +940,188 @@ function PatientsScreen({
   );
 }
 
+function ConsultationStatusBadge({ status }: { status: ConsultationStatus }) {
+  const colors = useColors();
+  const statusColor = status === 'cancelled'
+    ? colors.destructive
+    : status === 'completed'
+      ? colors.accentForeground
+      : colors.primary;
+  const statusBackground = status === 'cancelled'
+    ? colors.secondary
+    : status === 'completed'
+      ? colors.accent
+      : colors.card;
+  const iconName = status === 'pending'
+    ? 'time-outline'
+    : status === 'scheduled'
+      ? 'calendar-outline'
+      : status === 'completed'
+        ? 'checkmark-circle-outline'
+        : 'close-circle-outline';
+
+  return (
+    <View style={[styles.consultationStatusBadge, { backgroundColor: statusBackground, borderColor: colors.border }]}>
+      <Ionicons name={iconName} size={15} color={statusColor} />
+      <Text style={[styles.consultationStatusText, { color: statusColor }]}>{consultationStatusLabel(status)}</Text>
+    </View>
+  );
+}
+
+function ConsultationCard({
+  consultation,
+  onDelete,
+  onEdit,
+}: {
+  consultation: Consultation;
+  onDelete: (consultation: Consultation) => void;
+  onEdit: (consultation: Consultation) => void;
+}) {
+  const colors = useColors();
+  const dateLabel = consultationDateLabel(consultation);
+
+  return (
+    <View style={[styles.consultationCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={styles.consultationCardHeader}>
+        <View style={styles.consultationCardCopy}>
+          <Text style={[styles.consultationSpecialty, { color: colors.foreground }]}>{consultation.specialty}</Text>
+          {consultation.professionalName ? (
+            <Text style={[styles.consultationMeta, { color: colors.mutedForeground }]}>
+              {consultation.professionalName}
+            </Text>
+          ) : null}
+        </View>
+        <ConsultationStatusBadge status={consultation.status} />
+      </View>
+      <View style={styles.consultationDetails}>
+        <View style={styles.consultationDetailRow}>
+          <Ionicons name="calendar-outline" size={17} color={colors.primary} />
+          <Text style={[styles.consultationDetailText, { color: colors.foreground }]}>
+            {dateLabel ?? (consultation.status === 'pending' ? 'Data e hora a definir' : 'Data não informada')}
+          </Text>
+        </View>
+        {consultation.location ? (
+          <View style={styles.consultationDetailRow}>
+            <Ionicons name="location-outline" size={17} color={colors.primary} />
+            <Text style={[styles.consultationDetailText, { color: colors.mutedForeground }]}>{consultation.location}</Text>
+          </View>
+        ) : null}
+        {consultation.phone ? (
+          <View style={styles.consultationDetailRow}>
+            <Ionicons name="call-outline" size={17} color={colors.primary} />
+            <Text style={[styles.consultationDetailText, { color: colors.mutedForeground }]}>{consultation.phone}</Text>
+          </View>
+        ) : null}
+        {consultation.notes ? (
+          <Text style={[styles.consultationNotes, { color: colors.mutedForeground }]}>{consultation.notes}</Text>
+        ) : null}
+      </View>
+      <View style={[styles.consultationActions, { borderTopColor: colors.border }]}>
+        <Pressable
+          accessibilityLabel={`Editar consulta de ${consultation.specialty}`}
+          accessibilityRole="button"
+          onPress={() => onEdit(consultation)}
+          style={({ pressed }) => [styles.consultationAction, pressed ? styles.pressed : null]}
+          testID={`consultation-edit-${consultation.id}`}
+        >
+          <Ionicons name="create-outline" size={18} color={colors.primary} />
+          <Text style={[styles.consultationActionText, { color: colors.primary }]}>Editar</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel={`Excluir consulta de ${consultation.specialty}`}
+          accessibilityRole="button"
+          onPress={() => onDelete(consultation)}
+          style={({ pressed }) => [styles.consultationAction, pressed ? styles.pressed : null]}
+          testID={`consultation-delete-${consultation.id}`}
+        >
+          <Ionicons name="trash-outline" size={18} color={colors.destructive} />
+          <Text style={[styles.consultationActionText, { color: colors.destructive }]}>Excluir</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function ConsultationsScreen({
+  consultations,
+  onAdd,
+  onBack,
+  onDelete,
+  onEdit,
+  patient,
+}: {
+  consultations: Consultation[];
+  onAdd: () => void;
+  onBack: () => void;
+  onDelete: (consultation: Consultation) => void;
+  onEdit: (consultation: Consultation) => void;
+  patient: Patient;
+}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const pending = consultations.filter((item) => item.status === 'pending');
+  const upcoming = consultations
+    .filter(isUpcomingConsultation)
+    .sort((left, right) => consultationSortValue(left).localeCompare(consultationSortValue(right)));
+  const history = consultations.filter(
+    (item) => item.status === 'completed' || item.status === 'cancelled',
+  );
+
+  const renderSection = (title: string, items: Consultation[], emptyText: string) => (
+    <View style={styles.consultationSection}>
+      <Text style={[styles.consultationSectionTitle, { color: colors.foreground }]}>{title}</Text>
+      {items.length > 0 ? items.map((item) => (
+        <ConsultationCard key={item.id} consultation={item} onDelete={onDelete} onEdit={onEdit} />
+      )) : (
+        <Text style={[styles.consultationEmptyText, { color: colors.mutedForeground }]}>{emptyText}</Text>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={[styles.page, { backgroundColor: colors.background }]}>
+      <View style={[styles.managerHeader, { paddingTop: insets.top + 12 }]}>
+        <Pressable
+          accessibilityLabel="Voltar para a Home"
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => [styles.backButton, { borderColor: colors.border }, pressed ? styles.pressed : null]}
+          testID="consultations-back"
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+        </Pressable>
+        <View style={styles.managerHeaderCopy}>
+          <Text style={[styles.homeEyebrow, { color: colors.primary }]}>CONSULTAS</Text>
+          <Text style={[styles.managerTitle, { color: colors.foreground }]}>Consultas de {patient.name}</Text>
+          <Text style={[styles.managerDescription, { color: colors.mutedForeground }]}>
+            Acompanhe consultas deste familiar, inclusive as que ainda estão a agendar.
+          </Text>
+        </View>
+        <Pressable
+          accessibilityLabel="Adicionar consulta"
+          accessibilityRole="button"
+          onPress={onAdd}
+          style={({ pressed }) => [styles.addIconButton, { backgroundColor: colors.primary }, pressed ? styles.pressed : null]}
+          testID="consultation-add"
+        >
+          <Ionicons name="add" size={25} color={colors.primaryForeground} />
+        </Pressable>
+      </View>
+
+      <LocalBadge />
+      <KeyboardAwareScrollViewCompat
+        contentContainerStyle={[styles.consultationListContent, { paddingBottom: insets.bottom + 24 }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {renderSection('A agendar', pending, 'Nenhuma consulta aguardando agendamento.')}
+        {renderSection('Próximas', upcoming, 'Nenhuma consulta agendada.')}
+        {renderSection('Histórico', history, 'Nenhuma consulta realizada ou cancelada.')}
+      </KeyboardAwareScrollViewCompat>
+    </View>
+  );
+}
+
 function FieldLabel({ label, required }: { label: string; required?: boolean }) {
   const colors = useColors();
 
@@ -666,15 +1135,23 @@ function FieldLabel({ label, required }: { label: string; required?: boolean }) 
 
 function HomeScreen({
   caregiver,
-  patient,
+  consultations,
   onManagePatients,
+  onOpenConsultations,
+  patient,
 }: {
   caregiver: Caregiver;
-  patient: Patient;
+  consultations: Consultation[];
   onManagePatients: () => void;
+  onOpenConsultations: () => void;
+  patient: Patient;
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const pendingCount = consultations.filter((item) => item.status === 'pending').length;
+  const nextConsultation = consultations
+    .filter(isUpcomingConsultation)
+    .sort((left, right) => consultationSortValue(left).localeCompare(consultationSortValue(right)))[0] ?? null;
 
   return (
     <View style={[styles.page, { backgroundColor: colors.background }]}>
@@ -769,6 +1246,30 @@ function HomeScreen({
           <Text style={[styles.manageButtonText, { color: colors.primaryForeground }]}>Gerenciar familiares</Text>
         </Pressable>
 
+        <Pressable
+          accessibilityLabel={`Abrir consultas de ${patient.name}`}
+          accessibilityRole="button"
+          onPress={onOpenConsultations}
+          style={({ pressed }) => [
+            styles.consultationSummaryCard,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            pressed ? styles.pressed : null,
+          ]}
+          testID="home-consultations-button"
+        >
+          <View style={[styles.consultationSummaryIcon, { backgroundColor: colors.secondary }]}>
+            <Ionicons name="calendar-outline" size={23} color={colors.primary} />
+          </View>
+          <View style={styles.consultationSummaryCopy}>
+            <Text style={[styles.consultationSummaryTitle, { color: colors.foreground }]}>Consultas</Text>
+            <Text style={[styles.consultationSummaryMeta, { color: colors.mutedForeground }]}>
+              {pendingCount === 1 ? '1 consulta a agendar' : `${pendingCount} consultas a agendar`}
+              {nextConsultation ? ` · Próxima: ${consultationDateLabel(nextConsultation) ?? 'data a definir'}` : ''}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={colors.mutedForeground} />
+        </Pressable>
+
         <View style={[styles.infoCard, { backgroundColor: colors.secondary }]}>
           <Ionicons name="shield-checkmark-outline" size={22} color={colors.primary} />
           <View style={styles.infoCopy}>
@@ -837,11 +1338,17 @@ export default function IndexScreen() {
     selectPatient,
     updatePatient,
     deletePatient,
+    consultations,
+    createConsultation,
+    updateConsultation,
+    deleteConsultation,
     retry,
   } = useLocalData();
   const [step, setStep] = useState<OnboardingStep>('welcome');
   const [patientView, setPatientView] = useState<PatientView>('home');
   const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [consultationView, setConsultationView] = useState<ConsultationView>('none');
+  const [editingConsultation, setEditingConsultation] = useState<Consultation | null>(null);
 
   async function handlePatientSaved(input: CreatePatientInput) {
     if (editingPatient) {
@@ -854,6 +1361,40 @@ export default function IndexScreen() {
       }
     }
     setPatientView('home');
+  }
+
+  async function handleConsultationSaved(input: ConsultationFormInput) {
+    if (editingConsultation) {
+      await updateConsultation(editingConsultation.id, input);
+      setEditingConsultation(null);
+    } else {
+      await createConsultation(input);
+    }
+    setConsultationView('list');
+  }
+
+  function handleDeleteConsultation(consultation: Consultation) {
+    Alert.alert(
+      'Excluir consulta?',
+      `Os dados de ${consultation.specialty} serão removidos deste aparelho.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: () => {
+            void deleteConsultation(consultation.id)
+              .then(() => setConsultationView('list'))
+              .catch((error: unknown) => {
+                Alert.alert(
+                  'Não foi possível excluir',
+                  error instanceof Error ? error.message : 'Tente novamente.',
+                );
+              });
+          },
+        },
+      ],
+    );
   }
 
   function handleDeletePatient(patientToDelete: Patient) {
@@ -964,10 +1505,59 @@ export default function IndexScreen() {
     );
   }
 
+  if (consultationView === 'add') {
+    return (
+      <ConsultationForm
+        onBack={() => setConsultationView('list')}
+        onSaved={handleConsultationSaved}
+        title="Nova consulta"
+        description={`Cadastre uma consulta para ${patient.name}.`}
+        submitLabel="Salvar consulta"
+      />
+    );
+  }
+
+  if (consultationView === 'edit' && editingConsultation) {
+    return (
+      <ConsultationForm
+        initialConsultation={editingConsultation}
+        onBack={() => {
+          setEditingConsultation(null);
+          setConsultationView('list');
+        }}
+        onSaved={handleConsultationSaved}
+        title="Editar consulta"
+        description={`Atualize os dados da consulta de ${patient.name}.`}
+        submitLabel="Salvar alterações"
+      />
+    );
+  }
+
+  if (consultationView === 'list') {
+    return (
+      <ConsultationsScreen
+        consultations={consultations}
+        onAdd={() => {
+          setEditingConsultation(null);
+          setConsultationView('add');
+        }}
+        onBack={() => setConsultationView('none')}
+        onDelete={handleDeleteConsultation}
+        onEdit={(consultationToEdit) => {
+          setEditingConsultation(consultationToEdit);
+          setConsultationView('edit');
+        }}
+        patient={patient}
+      />
+    );
+  }
+
   return (
     <HomeScreen
       caregiver={caregiver}
+      consultations={consultations}
       onManagePatients={() => setPatientView('list')}
+      onOpenConsultations={() => setConsultationView('list')}
       patient={patient}
     />
   );
@@ -1060,6 +1650,27 @@ const styles = StyleSheet.create({
   emptyPatients: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 44 },
   emptyPatientsTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', marginTop: 14, textAlign: 'center' },
   emptyPatientsDescription: { fontSize: 14, lineHeight: 20, fontFamily: 'Inter_400Regular', marginTop: 7, textAlign: 'center' },
+  consultationStatusOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  consultationStatusOption: { minHeight: 44, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  consultationStatusOptionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  consultationListContent: { paddingHorizontal: 24 },
+  consultationSection: { marginTop: 22, gap: 10 },
+  consultationSectionTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
+  consultationEmptyText: { fontSize: 14, lineHeight: 20, fontFamily: 'Inter_400Regular' },
+  consultationCard: { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
+  consultationCardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 16 },
+  consultationCardCopy: { flex: 1 },
+  consultationSpecialty: { fontSize: 17, fontFamily: 'Inter_700Bold' },
+  consultationMeta: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_400Regular', marginTop: 4 },
+  consultationStatusBadge: { minHeight: 30, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 9 },
+  consultationStatusText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
+  consultationDetails: { gap: 7, paddingHorizontal: 16, paddingBottom: 16 },
+  consultationDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  consultationDetailText: { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: 'Inter_500Medium' },
+  consultationNotes: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  consultationActions: { flexDirection: 'row', borderTopWidth: 1, paddingHorizontal: 10 },
+  consultationAction: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8 },
+  consultationActionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   backButton: {
     width: 46,
     height: 46,
@@ -1105,6 +1716,11 @@ const styles = StyleSheet.create({
   secondaryActionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   manageButton: { minHeight: 54, borderRadius: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 16 },
   manageButtonText: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  consultationSummaryCard: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 20, padding: 14, marginTop: 14 },
+  consultationSummaryIcon: { width: 45, height: 45, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  consultationSummaryCopy: { flex: 1 },
+  consultationSummaryTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  consultationSummaryMeta: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 3 },
   readyCard: { borderWidth: 1, borderRadius: 24, padding: 22, marginTop: 18 },
   readyIcon: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
   readyTitle: { fontSize: 21, fontFamily: 'Inter_700Bold' },
