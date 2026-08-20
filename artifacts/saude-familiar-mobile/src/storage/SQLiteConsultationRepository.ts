@@ -6,6 +6,7 @@ import type {
 } from '@/domain/consultation';
 import type { ConsultationRepository } from '@/repositories/ConsultationRepository';
 import { createGlobalId } from '@/utils/ids';
+import { withConsultationWriteLock } from '@/storage/consultationWriteMutex';
 
 type ConsultationRow = {
   id: string;
@@ -99,23 +100,25 @@ export class SQLiteConsultationRepository implements ConsultationRepository {
       updatedAt: now,
     };
 
-    await this.database.runAsync(
-      `INSERT INTO consultations (
-        id, patient_id, specialty, professional_name, location, phone,
-        date, time, notes, status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      consultation.id,
-      consultation.patientId,
-      consultation.specialty,
-      consultation.professionalName,
-      consultation.location,
-      consultation.phone,
-      consultation.date,
-      consultation.time,
-      consultation.notes,
-      consultation.status,
-      consultation.createdAt,
-      consultation.updatedAt,
+    await withConsultationWriteLock(() =>
+      this.database.runAsync(
+        `INSERT INTO consultations (
+          id, patient_id, specialty, professional_name, location, phone,
+          date, time, notes, status, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        consultation.id,
+        consultation.patientId,
+        consultation.specialty,
+        consultation.professionalName,
+        consultation.location,
+        consultation.phone,
+        consultation.date,
+        consultation.time,
+        consultation.notes,
+        consultation.status,
+        consultation.createdAt,
+        consultation.updatedAt,
+      ).then(() => undefined),
     );
 
     return consultation;
@@ -128,21 +131,23 @@ export class SQLiteConsultationRepository implements ConsultationRepository {
     }
 
     const now = new Date().toISOString();
-    await this.database.runAsync(
-      `UPDATE consultations
-       SET specialty = ?, professional_name = ?, location = ?, phone = ?,
-           date = ?, time = ?, notes = ?, status = ?, updated_at = ?
-       WHERE id = ?`,
-      specialty,
-      nullableText(input.professionalName),
-      nullableText(input.location),
-      nullableText(input.phone),
-      nullableText(input.date),
-      nullableText(input.time),
-      nullableText(input.notes),
-      input.status,
-      now,
-      id,
+    await withConsultationWriteLock(() =>
+      this.database.runAsync(
+        `UPDATE consultations
+         SET specialty = ?, professional_name = ?, location = ?, phone = ?,
+             date = ?, time = ?, notes = ?, status = ?, updated_at = ?
+         WHERE id = ?`,
+        specialty,
+        nullableText(input.professionalName),
+        nullableText(input.location),
+        nullableText(input.phone),
+        nullableText(input.date),
+        nullableText(input.time),
+        nullableText(input.notes),
+        input.status,
+        now,
+        id,
+      ).then(() => undefined),
     );
 
     const consultation = await this.getById(id);
@@ -154,6 +159,8 @@ export class SQLiteConsultationRepository implements ConsultationRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await this.database.runAsync('DELETE FROM consultations WHERE id = ?', id);
+    await withConsultationWriteLock(() =>
+      this.database.runAsync('DELETE FROM consultations WHERE id = ?', id).then(() => undefined),
+    );
   }
 }

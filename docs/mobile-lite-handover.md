@@ -62,7 +62,7 @@ A navegação ainda está concentrada na rota principal para manter o diff peque
 
 ## 7. Decisões de arquitetura
 
-A decisão principal é separar **Caregiver único por aparelho** de **N Patients** e vincular cada módulo clínico ao `patientId` do familiar ativo. A seleção ativa é estado de interface, não uma relação estrutural `Caregiver : Patient`. Consultas não usam foreign key destrutiva; a exclusão de dados vinculados ocorre somente após confirmação explícita do Patient e dentro da mesma transação.
+A decisão principal é separar **Caregiver único por aparelho** de **N Patients** e vincular cada módulo clínico ao `patientId` do familiar ativo. A seleção ativa é estado de interface, não uma relação estrutural `Caregiver : Patient`. Consultas não usam foreign key destrutiva; a exclusão de dados vinculados ocorre somente após confirmação explícita do Patient e dentro da mesma transação. As escritas de Consultation e a limpeza de Patient compartilham um mutex em memória; no native a limpeza usa transação exclusiva e no web usa transação comum protegida pelo mutex.
 
 A lista usa `FlatList` para evitar renderização manual de listas longas. As ações principais têm labels acessíveis e áreas de toque grandes. A exclusão é confirmada por `Alert` antes da remoção local.
 

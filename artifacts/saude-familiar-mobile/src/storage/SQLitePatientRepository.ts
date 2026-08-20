@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { Platform } from 'react-native';
+import { withConsultationWriteLock } from '@/storage/consultationWriteMutex';
 import type {
   CreatePatientInput,
   Patient,
@@ -130,17 +131,19 @@ export class SQLitePatientRepository implements PatientRepository {
   }
 
   async delete(id: string): Promise<void> {
-    if (Platform.OS === 'web') {
-      await this.database.withTransactionAsync(async () => {
-        await this.database.runAsync('DELETE FROM consultations WHERE patient_id = ?', id);
-        await this.database.runAsync('DELETE FROM patients WHERE id = ?', id);
-      });
-      return;
-    }
+    await withConsultationWriteLock(async () => {
+      if (Platform.OS === 'web') {
+        await this.database.withTransactionAsync(async () => {
+          await this.database.runAsync('DELETE FROM consultations WHERE patient_id = ?', id);
+          await this.database.runAsync('DELETE FROM patients WHERE id = ?', id);
+        });
+        return;
+      }
 
-    await this.database.withExclusiveTransactionAsync(async (transaction) => {
-      await transaction.runAsync('DELETE FROM consultations WHERE patient_id = ?', id);
-      await transaction.runAsync('DELETE FROM patients WHERE id = ?', id);
+      await this.database.withExclusiveTransactionAsync(async (transaction) => {
+        await transaction.runAsync('DELETE FROM consultations WHERE patient_id = ?', id);
+        await transaction.runAsync('DELETE FROM patients WHERE id = ?', id);
+      });
     });
   }
 }
