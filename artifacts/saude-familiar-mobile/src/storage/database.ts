@@ -5,6 +5,7 @@ const OPTIONAL_BIRTH_DATE_MIGRATION = 2;
 const CAREGIVER_MIGRATION = 3;
 const CAREGIVER_SINGLETON_MIGRATION = 4;
 const CONSULTATIONS_MIGRATION = 5;
+const REMINDERS_MIGRATION = 6;
 
 async function getLatestMigration(database: SQLiteDatabase): Promise<number> {
   const migration = await database.getFirstAsync<{ version: number }>(
@@ -151,6 +152,34 @@ async function createConsultationsSchema(database: SQLiteDatabase): Promise<void
   });
 }
 
+async function createRemindersSchema(database: SQLiteDatabase): Promise<void> {
+  await database.withTransactionAsync(async () => {
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS reminders (
+        id TEXT PRIMARY KEY NOT NULL,
+        consultation_id TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('consultation_advance', 'scheduling_task')),
+        trigger_at TEXT NOT NULL,
+        offset_value INTEGER,
+        offset_unit TEXT CHECK (offset_unit IN ('minutes', 'hours', 'days')),
+        notification_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS reminders_consultation_idx
+        ON reminders (consultation_id, trigger_at);
+      CREATE INDEX IF NOT EXISTS reminders_trigger_idx
+        ON reminders (trigger_at);
+    `);
+
+    await database.runAsync(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+      REMINDERS_MIGRATION,
+      new Date().toISOString(),
+    );
+  });
+}
+
 export async function initializeDatabase(database: SQLiteDatabase): Promise<void> {
   await database.execAsync('PRAGMA journal_mode = WAL;');
   await database.execAsync(`
@@ -181,5 +210,9 @@ export async function initializeDatabase(database: SQLiteDatabase): Promise<void
   }
   if (currentVersion < CONSULTATIONS_MIGRATION) {
     await createConsultationsSchema(database);
+    currentVersion = CONSULTATIONS_MIGRATION;
+  }
+  if (currentVersion < REMINDERS_MIGRATION) {
+    await createRemindersSchema(database);
   }
 }

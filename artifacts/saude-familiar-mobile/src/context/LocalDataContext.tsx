@@ -14,10 +14,17 @@ import type {
   CreateConsultationInput,
   UpdateConsultationInput,
 } from '@/domain/consultation';
+import type { Reminder } from '@/domain/reminder';
 import type { CreatePatientInput, Patient } from '@/domain/patient';
 import { SQLiteCaregiverRepository } from '@/storage/SQLiteCaregiverRepository';
 import { SQLitePatientRepository } from '@/storage/SQLitePatientRepository';
 import { SQLiteConsultationRepository } from '@/storage/SQLiteConsultationRepository';
+import { SQLiteReminderRepository } from '@/storage/SQLiteReminderRepository';
+import {
+  cancelReminderNotifications,
+  syncConsultationReminders,
+} from '@/services/reminderCoordinator';
+import type { ReminderSelection } from '@/utils/reminderPlanning';
 
 type LocalDataStatus = 'loading' | 'ready' | 'error';
 
@@ -26,7 +33,19 @@ type PatientCreateResult = {
   warning: string | null;
 };
 
-type CreateConsultationData = Omit<CreateConsultationInput, 'patientId'>;
+type ConsultationSaveInput = Omit<CreateConsultationInput, 'patientId'> & {
+  reminderSelection: ReminderSelection;
+};
+
+type ConsultationSaveResult = {
+  consultation: Consultation;
+  warning: string | null;
+};
+
+type PatientRemovalSummary = {
+  consultationCount: number;
+  reminderCount: number;
+};
 
 type LocalDataContextValue = {
   status: LocalDataStatus;
@@ -39,9 +58,11 @@ type LocalDataContextValue = {
   selectPatient: (id: string) => Promise<void>;
   updatePatient: (id: string, input: CreatePatientInput) => Promise<Patient>;
   deletePatient: (id: string) => Promise<void>;
+  getPatientRemovalSummary: (id: string) => Promise<PatientRemovalSummary>;
   consultations: Consultation[];
-  createConsultation: (input: CreateConsultationData) => Promise<Consultation>;
-  updateConsultation: (id: string, input: UpdateConsultationInput) => Promise<Consultation>;
+  reminders: Reminder[];
+  createConsultation: (input: ConsultationSaveInput) => Promise<ConsultationSaveResult>;
+  updateConsultation: (id: string, input: ConsultationSaveInput) => Promise<ConsultationSaveResult>;
   deleteConsultation: (id: string) => Promise<void>;
   retry: () => Promise<void>;
 };
@@ -62,6 +83,16 @@ async function persistActivePatientId(id: string | null): Promise<boolean> {
   }
 }
 
+async function listRemindersForConsultations(
+  reminderRepository: SQLiteReminderRepository,
+  consultations: Consultation[],
+): Promise<Reminder[]> {
+  const groupedReminders = await Promise.all(
+    consultations.map((consultation) => reminderRepository.listByConsultation(consultation.id)),
+  );
+  return groupedReminders.flat();
+}
+
 export function LocalDataProvider({ children }: { children: React.ReactNode }) {
   const database = useSQLiteContext();
   const caregiverRepository = useMemo(
@@ -76,11 +107,16 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     () => new SQLiteConsultationRepository(database),
     [database],
   );
+  const reminderRepository = useMemo(
+    () => new SQLiteReminderRepository(database),
+    [database],
+  );
   const [status, setStatus] = useState<LocalDataStatus>('loading');
   const [caregiver, setCaregiver] = useState<Caregiver | null>(null);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [consultations, setConsultations] = useState<Consultation[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const loadLocalData = useCallback(async () => {
@@ -105,16 +141,21 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       const currentConsultations = activePatient
         ? await consultationRepository.listByPatient(activePatient.id)
         : [];
+      const currentReminders = await listRemindersForConsultations(
+        reminderRepository,
+        currentConsultations,
+      );
       setCaregiver(currentCaregiver);
       setPatients(currentPatients);
       setPatient(activePatient);
       setConsultations(currentConsultations);
+      setReminders(currentReminders);
       setStatus('ready');
     } catch {
       setStatus('error');
       setError('Não foi possível abrir os dados deste aparelho.');
     }
-  }, [caregiverRepository, consultationRepository, patientRepository]);
+  }, [caregiverRepository, consultationRepository, patientRepository, reminderRepository]);
 
   useEffect(() => {
     void loadLocalData();
@@ -144,6 +185,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
         setPatients((currentPatients) => [...currentPatients, createdPatient]);
         setPatient(createdPatient);
         setConsultations([]);
+        setReminders([]);
         const warning = (await persistActivePatientId(createdPatient.id))
           ? null
           : 'Familiar salvo, mas a seleção não será lembrada ao reabrir o aplicativo.';
@@ -167,6 +209,10 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       }
 
       const nextConsultations = await consultationRepository.listByPatient(selectedPatient.id);
+      const nextReminders = await listRemindersForConsultations(
+        reminderRepository,
+        nextConsultations,
+      );
       const activePatientPersisted = await persistActivePatientId(selectedPatient.id);
       if (!activePatientPersisted) {
         throw new Error('Não foi possível guardar a seleção deste familiar. Tente novamente.');
@@ -174,8 +220,9 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
 
       setPatient(selectedPatient);
       setConsultations(nextConsultations);
+      setReminders(nextReminders);
     },
-    [consultationRepository, patientRepository],
+    [consultationRepository, patientRepository, reminderRepository],
   );
 
   const updatePatient = useCallback(
@@ -192,8 +239,33 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     [patientRepository],
   );
 
+  const getPatientRemovalSummary = useCallback(
+    async (id: string): Promise<PatientRemovalSummary> => {
+      const relatedConsultations = await consultationRepository.listByPatient(id);
+      const relatedReminders = await listRemindersForConsultations(
+        reminderRepository,
+        relatedConsultations,
+      );
+      return {
+        consultationCount: relatedConsultations.length,
+        reminderCount: relatedReminders.length,
+      };
+    },
+    [consultationRepository, reminderRepository],
+  );
+
   const deletePatient = useCallback(
     async (id: string) => {
+      const relatedConsultations = await consultationRepository.listByPatient(id);
+      const relatedReminders = await listRemindersForConsultations(
+        reminderRepository,
+        relatedConsultations,
+      );
+      const cancellationWarning = await cancelReminderNotifications(relatedReminders);
+      if (cancellationWarning) {
+        throw new Error(cancellationWarning);
+      }
+
       await patientRepository.delete(id);
       const remainingPatients = patients.filter((item) => item.id !== id);
       setPatients(remainingPatients);
@@ -203,8 +275,13 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
         const nextConsultations = nextPatient
           ? await consultationRepository.listByPatient(nextPatient.id)
           : [];
+        const nextReminders = await listRemindersForConsultations(
+          reminderRepository,
+          nextConsultations,
+        );
         setPatient(nextPatient);
         setConsultations(nextConsultations);
+        setReminders(nextReminders);
         const activePatientPersisted = await persistActivePatientId(nextPatient?.id ?? null);
         if (!activePatientPersisted) {
           throw new Error(
@@ -213,40 +290,82 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
         }
       }
     },
-    [consultationRepository, patient, patientRepository, patients],
+    [consultationRepository, patient, patientRepository, patients, reminderRepository],
   );
 
   const createConsultation = useCallback(
-    async (input: CreateConsultationData) => {
+    async (input: ConsultationSaveInput): Promise<ConsultationSaveResult> => {
       const patientId = patient?.id;
-      if (!patientId) {
+      if (!patientId || !patient) {
         throw new Error('Selecione um familiar antes de cadastrar uma consulta.');
       }
 
+      const { reminderSelection, ...consultationInput } = input;
       const createdConsultation = await consultationRepository.create({
-        ...input,
+        ...consultationInput,
         patientId,
       });
+      let reminderResult: { reminders: Reminder[]; warning: string | null };
+      try {
+        reminderResult = await syncConsultationReminders({
+          consultation: createdConsultation,
+          patientName: patient.name,
+          selection: reminderSelection,
+          reminderRepository,
+        });
+      } catch {
+        reminderResult = {
+          reminders: [],
+          warning: 'Consulta salva, mas não foi possível configurar os lembretes. Tente novamente ao editar.',
+        };
+      }
       setConsultations((currentConsultations) => [...currentConsultations, createdConsultation]);
-      return createdConsultation;
+      setReminders((currentReminders) => [...currentReminders, ...reminderResult.reminders]);
+      return { consultation: createdConsultation, warning: reminderResult.warning };
     },
-    [consultationRepository, patient?.id],
+    [consultationRepository, patient, reminderRepository],
   );
 
   const updateConsultation = useCallback(
-    async (id: string, input: UpdateConsultationInput) => {
+    async (id: string, input: ConsultationSaveInput): Promise<ConsultationSaveResult> => {
       const currentConsultation = consultations.find((item) => item.id === id);
-      if (!currentConsultation || currentConsultation.patientId !== patient?.id) {
+      if (!currentConsultation || currentConsultation.patientId !== patient?.id || !patient) {
         throw new Error('Consulta não encontrada para o familiar selecionado.');
       }
 
-      const updatedConsultation = await consultationRepository.update(id, input);
+      const { reminderSelection, ...consultationInput } = input;
+      const existingReminders = await reminderRepository.listByConsultation(id);
+      const cancellationWarning = await cancelReminderNotifications(existingReminders);
+      if (cancellationWarning) {
+        throw new Error(cancellationWarning);
+      }
+      const updatedConsultation = await consultationRepository.update(id, consultationInput);
+      let reminderResult: { reminders: Reminder[]; warning: string | null };
+      try {
+        reminderResult = await syncConsultationReminders({
+          consultation: updatedConsultation,
+          patientName: patient.name,
+          selection: reminderSelection,
+          reminderRepository,
+          existingReminders,
+          skipCancellation: true,
+        });
+      } catch {
+        reminderResult = {
+          reminders: existingReminders,
+          warning: 'Consulta atualizada, mas não foi possível atualizar os lembretes. Tente novamente.',
+        };
+      }
       setConsultations((currentConsultations) =>
         currentConsultations.map((item) => (item.id === id ? updatedConsultation : item)),
       );
-      return updatedConsultation;
+      setReminders((currentReminders) => [
+        ...currentReminders.filter((item) => item.consultationId !== id),
+        ...reminderResult.reminders,
+      ]);
+      return { consultation: updatedConsultation, warning: reminderResult.warning };
     },
-    [consultationRepository, consultations, patient?.id],
+    [consultationRepository, consultations, patient, reminderRepository],
   );
 
   const deleteConsultation = useCallback(
@@ -256,12 +375,20 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Consulta não encontrada para o familiar selecionado.');
       }
 
+      const relatedReminders = await reminderRepository.listByConsultation(id);
+      const cancellationWarning = await cancelReminderNotifications(relatedReminders);
+      if (cancellationWarning) {
+        throw new Error(cancellationWarning);
+      }
       await consultationRepository.delete(id);
       setConsultations((currentConsultations) =>
         currentConsultations.filter((item) => item.id !== id),
       );
+      setReminders((currentReminders) =>
+        currentReminders.filter((item) => item.consultationId !== id),
+      );
     },
-    [consultationRepository, consultations, patient?.id],
+    [consultationRepository, consultations, patient?.id, reminderRepository],
   );
 
   const value = useMemo(
@@ -276,7 +403,9 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       selectPatient,
       updatePatient,
       deletePatient,
+      getPatientRemovalSummary,
       consultations,
+      reminders,
       createConsultation,
       updateConsultation,
       deleteConsultation,
@@ -292,9 +421,11 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       updateConsultation,
       deleteConsultation,
       error,
+      getPatientRemovalSummary,
       loadLocalData,
       patient,
       patients,
+      reminders,
       selectPatient,
       status,
       updatePatient,

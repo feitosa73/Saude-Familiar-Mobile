@@ -20,14 +20,45 @@ import type {
   ConsultationStatus,
   CreateConsultationInput,
 } from '@/domain/consultation';
+import type { Reminder, ReminderOffsetUnit } from '@/domain/reminder';
 import type { CreatePatientInput, Patient } from '@/domain/patient';
 import { useColors } from '@/hooks/useColors';
 import { useLocalData } from '@/context/LocalDataContext';
+import {
+  localDateInputFromIso,
+  localDateTimeToIso,
+  localTimeInputFromIso,
+  type PendingReminderPreset,
+  type ReminderOffsetSelection,
+  type ReminderSelection,
+} from '@/utils/reminderPlanning';
 
 type OnboardingStep = 'welcome' | 'caregiver-form';
 type PatientView = 'home' | 'list' | 'add' | 'edit';
 type ConsultationView = 'none' | 'list' | 'add' | 'edit';
-type ConsultationFormInput = Omit<CreateConsultationInput, 'patientId'>;
+type ConsultationFormInput = Omit<CreateConsultationInput, 'patientId'> & {
+  reminderSelection: ReminderSelection;
+};
+
+const SCHEDULED_REMINDER_OPTIONS: Array<{
+  label: string;
+  offset: ReminderOffsetSelection;
+}> = [
+  { label: '30 minutos antes', offset: { offsetValue: 30, offsetUnit: 'minutes' } },
+  { label: '1 hora antes', offset: { offsetValue: 1, offsetUnit: 'hours' } },
+  { label: '2 horas antes', offset: { offsetValue: 2, offsetUnit: 'hours' } },
+  { label: '1 dia antes', offset: { offsetValue: 1, offsetUnit: 'days' } },
+  { label: '2 dias antes', offset: { offsetValue: 2, offsetUnit: 'days' } },
+  { label: '1 semana antes', offset: { offsetValue: 7, offsetUnit: 'days' } },
+];
+
+const PENDING_REMINDER_OPTIONS: Array<{ label: string; value: PendingReminderPreset }> = [
+  { label: 'Não lembrar', value: 'none' },
+  { label: 'Amanhã às 09:00', value: 'tomorrow' },
+  { label: 'Daqui a 3 dias às 09:00', value: 'three_days' },
+  { label: 'Daqui a 1 semana às 09:00', value: 'one_week' },
+  { label: 'Data/hora personalizada', value: 'custom' },
+];
 
 const CONSULTATION_STATUS_LABELS: Record<ConsultationStatus, string> = {
   pending: 'A agendar',
@@ -151,6 +182,35 @@ function parseConsultationTime(value: string): string | null {
 function formatCivilDate(value: string): string {
   const [year, month, day] = value.split('-');
   return `${day}/${month}/${year}`;
+}
+
+function formatReminderSummary(reminder: Reminder): string {
+  if (reminder.type === 'scheduling_task') {
+    return `Em ${localDateInputFromIso(reminder.triggerAt)} às ${localTimeInputFromIso(reminder.triggerAt)}`;
+  }
+
+  const value = reminder.offsetValue ?? 0;
+  const unit = reminder.offsetUnit === 'minutes'
+    ? value === 1 ? 'minuto' : 'minutos'
+    : reminder.offsetUnit === 'hours'
+      ? value === 1 ? 'hora' : 'horas'
+      : value === 1 ? 'dia' : 'dias';
+  return `${value} ${unit} antes`;
+}
+
+function initialReminderSelection(reminders: Reminder[]): ReminderSelection {
+  const scheduledOffsets = reminders
+    .filter((item) => item.type === 'consultation_advance' && item.offsetValue && item.offsetUnit)
+    .map((item) => ({
+      offsetValue: item.offsetValue as number,
+      offsetUnit: item.offsetUnit as ReminderOffsetUnit,
+    }));
+  const pendingReminder = reminders.find((item) => item.type === 'scheduling_task');
+  return {
+    scheduledOffsets,
+    pendingPreset: pendingReminder ? 'custom' : 'none',
+    pendingCustomTriggerAt: pendingReminder?.triggerAt ?? null,
+  };
 }
 
 function LocalBadge() {
@@ -594,8 +654,10 @@ function ConsultationForm({
   title,
   description,
   submitLabel,
+  initialReminders = [],
 }: {
   initialConsultation?: Consultation | null;
+  initialReminders?: Reminder[];
   onBack: () => void;
   onSaved: (input: ConsultationFormInput) => Promise<void>;
   title: string;
@@ -614,8 +676,44 @@ function ConsultationForm({
   );
   const [time, setTime] = useState(initialConsultation?.time ?? '');
   const [notes, setNotes] = useState(initialConsultation?.notes ?? '');
+  const initialSelection = initialReminderSelection(initialReminders);
+  const initialCustomScheduledOffset = initialSelection.scheduledOffsets.find(
+    (offset) => !SCHEDULED_REMINDER_OPTIONS.some(
+      (option) => option.offset.offsetValue === offset.offsetValue && option.offset.offsetUnit === offset.offsetUnit,
+    ),
+  );
+  const [scheduledOffsets, setScheduledOffsets] = useState<ReminderOffsetSelection[]>(initialSelection.scheduledOffsets);
+  const [customScheduledEnabled, setCustomScheduledEnabled] = useState(Boolean(initialCustomScheduledOffset));
+  const [customOffsetValue, setCustomOffsetValue] = useState(
+    initialCustomScheduledOffset ? String(initialCustomScheduledOffset.offsetValue) : '',
+  );
+  const [customOffsetUnit, setCustomOffsetUnit] = useState<ReminderOffsetUnit>(
+    initialCustomScheduledOffset?.offsetUnit ?? 'days',
+  );
+  const [pendingPreset, setPendingPreset] = useState<PendingReminderPreset>(initialSelection.pendingPreset);
+  const [pendingCustomDate, setPendingCustomDate] = useState(
+    initialSelection.pendingCustomTriggerAt
+      ? localDateInputFromIso(initialSelection.pendingCustomTriggerAt)
+      : '',
+  );
+  const [pendingCustomTime, setPendingCustomTime] = useState(
+    initialSelection.pendingCustomTriggerAt
+      ? localTimeInputFromIso(initialSelection.pendingCustomTriggerAt)
+      : '',
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  function toggleScheduledOffset(offset: ReminderOffsetSelection) {
+    setScheduledOffsets((current) => {
+      const exists = current.some(
+        (item) => item.offsetValue === offset.offsetValue && item.offsetUnit === offset.offsetUnit,
+      );
+      return exists
+        ? current.filter((item) => item.offsetValue !== offset.offsetValue || item.offsetUnit !== offset.offsetUnit)
+        : [...current, offset];
+    });
+  }
 
   async function handleSubmit() {
     Keyboard.dismiss();
@@ -638,6 +736,46 @@ function ConsultationForm({
       return;
     }
 
+    let reminderOffsets = status === 'scheduled' ? scheduledOffsets : [];
+    if (status === 'scheduled' && customScheduledEnabled) {
+      const parsedOffset = Number(customOffsetValue);
+      if (!Number.isInteger(parsedOffset) || parsedOffset <= 0) {
+        setError('Informe uma antecedência personalizada positiva.');
+        return;
+      }
+      const customOffset = { offsetValue: parsedOffset, offsetUnit: customOffsetUnit };
+      const standardOffsets = reminderOffsets.filter((offset) =>
+        SCHEDULED_REMINDER_OPTIONS.some(
+          (option) => option.offset.offsetValue === offset.offsetValue && option.offset.offsetUnit === offset.offsetUnit,
+        ),
+      );
+      reminderOffsets = standardOffsets.some(
+        (offset) => offset.offsetValue === customOffset.offsetValue && offset.offsetUnit === customOffset.offsetUnit,
+      )
+        ? standardOffsets
+        : [...standardOffsets, customOffset];
+    }
+
+    let pendingCustomTriggerAt: string | null = null;
+    if (status === 'pending' && pendingPreset === 'custom') {
+      const pendingDate = pendingCustomDate.trim() ? parseConsultationDate(pendingCustomDate) : null;
+      const pendingTime = parseConsultationTime(pendingCustomTime.trim());
+      if (!pendingDate || !pendingTime) {
+        setError('Informe data e hora válidas para o lembrete personalizado.');
+        return;
+      }
+      pendingCustomTriggerAt = localDateTimeToIso(pendingDate, pendingTime);
+      if (!pendingCustomTriggerAt) {
+        setError('Não foi possível interpretar a data e hora do lembrete.');
+        return;
+      }
+    }
+
+    if (status === 'scheduled' && reminderOffsets.length > 0 && (!civilDate || !normalizedTime)) {
+      setError('Informe data e hora da consulta antes de configurar lembretes.');
+      return;
+    }
+
     setIsSaving(true);
     try {
       await onSaved({
@@ -649,6 +787,11 @@ function ConsultationForm({
         time: normalizedTime,
         notes: notes.trim() || null,
         status,
+        reminderSelection: {
+          scheduledOffsets: reminderOffsets,
+          pendingPreset: status === 'pending' ? pendingPreset : 'none',
+          pendingCustomTriggerAt,
+        },
       });
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a consulta.');
@@ -807,6 +950,167 @@ function ConsultationForm({
             textAlignVertical="top"
             value={notes}
           />
+
+          {status === 'scheduled' ? (
+            <View style={styles.reminderFields}>
+              <FieldLabel label="Lembretes" />
+              <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>Escolha uma ou mais antecedências. Se nada for escolhido, não haverá lembrete.</Text>
+              <Pressable
+                accessibilityLabel="Não lembrar desta consulta"
+                accessibilityRole="button"
+                accessibilityState={{ selected: scheduledOffsets.length === 0 && !customScheduledEnabled }}
+                onPress={() => {
+                  setScheduledOffsets([]);
+                  setCustomScheduledEnabled(false);
+                }}
+                style={({ pressed }) => [
+                  styles.reminderOption,
+                  {
+                    backgroundColor: scheduledOffsets.length === 0 && !customScheduledEnabled ? colors.primary : colors.card,
+                    borderColor: scheduledOffsets.length === 0 && !customScheduledEnabled ? colors.primary : colors.border,
+                  },
+                  pressed ? styles.pressed : null,
+                ]}
+                testID="consultation-reminder-none"
+              >
+                <Text style={[styles.reminderOptionText, { color: scheduledOffsets.length === 0 && !customScheduledEnabled ? colors.primaryForeground : colors.foreground }]}>Não lembrar</Text>
+              </Pressable>
+              {SCHEDULED_REMINDER_OPTIONS.map((option) => {
+                const isSelected = scheduledOffsets.some(
+                  (offset) => offset.offsetValue === option.offset.offsetValue && offset.offsetUnit === option.offset.offsetUnit,
+                );
+                return (
+                  <Pressable
+                    key={option.label}
+                    accessibilityLabel={option.label}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    onPress={() => toggleScheduledOffset(option.offset)}
+                    style={({ pressed }) => [
+                      styles.reminderOption,
+                      {
+                        backgroundColor: isSelected ? colors.primary : colors.card,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                      },
+                      pressed ? styles.pressed : null,
+                    ]}
+                    testID={`consultation-reminder-${option.offset.offsetValue}-${option.offset.offsetUnit}`}
+                  >
+                    <Text style={[styles.reminderOptionText, { color: isSelected ? colors.primaryForeground : colors.foreground }]}>{option.label}</Text>
+                  </Pressable>
+                );
+              })}
+              <Pressable
+                accessibilityLabel="Antecedência personalizada"
+                accessibilityRole="button"
+                accessibilityState={{ selected: customScheduledEnabled }}
+                onPress={() => setCustomScheduledEnabled((current) => !current)}
+                style={({ pressed }) => [
+                  styles.reminderOption,
+                  {
+                    backgroundColor: customScheduledEnabled ? colors.primary : colors.card,
+                    borderColor: customScheduledEnabled ? colors.primary : colors.border,
+                  },
+                  pressed ? styles.pressed : null,
+                ]}
+                testID="consultation-reminder-custom"
+              >
+                <Text style={[styles.reminderOptionText, { color: customScheduledEnabled ? colors.primaryForeground : colors.foreground }]}>Personalizado</Text>
+              </Pressable>
+              {customScheduledEnabled ? (
+                <View style={styles.reminderCustomRow}>
+                  <TextInput
+                    accessibilityLabel="Quantidade da antecedência personalizada"
+                    keyboardType="number-pad"
+                    onChangeText={(value) => setCustomOffsetValue(value.replace(/\D/g, '').slice(0, 3))}
+                    placeholder="3"
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[styles.reminderCustomInput, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+                    testID="consultation-reminder-custom-value"
+                    value={customOffsetValue}
+                  />
+                  {(['minutes', 'hours', 'days'] as ReminderOffsetUnit[]).map((unit) => {
+                    const isSelected = customOffsetUnit === unit;
+                    const label = unit === 'minutes' ? 'minutos' : unit === 'hours' ? 'horas' : 'dias';
+                    return (
+                      <Pressable
+                        key={unit}
+                        accessibilityLabel={label}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
+                        onPress={() => setCustomOffsetUnit(unit)}
+                        style={({ pressed }) => [
+                          styles.reminderUnitOption,
+                          {
+                            backgroundColor: isSelected ? colors.primary : colors.card,
+                            borderColor: isSelected ? colors.primary : colors.border,
+                          },
+                          pressed ? styles.pressed : null,
+                        ]}
+                        testID={`consultation-reminder-unit-${unit}`}
+                      >
+                        <Text style={[styles.reminderUnitText, { color: isSelected ? colors.primaryForeground : colors.foreground }]}>{label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </View>
+          ) : status === 'pending' ? (
+            <View style={styles.reminderFields}>
+              <FieldLabel label="Lembrete para agendar" />
+              <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>A consulta ainda não tem horário. Escolha quando lembrar de realizar o agendamento.</Text>
+              {PENDING_REMINDER_OPTIONS.map((option) => {
+                const isSelected = pendingPreset === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    accessibilityLabel={option.label}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    onPress={() => setPendingPreset(option.value)}
+                    style={({ pressed }) => [
+                      styles.reminderOption,
+                      {
+                        backgroundColor: isSelected ? colors.primary : colors.card,
+                        borderColor: isSelected ? colors.primary : colors.border,
+                      },
+                      pressed ? styles.pressed : null,
+                    ]}
+                    testID={`consultation-pending-reminder-${option.value}`}
+                  >
+                    <Text style={[styles.reminderOptionText, { color: isSelected ? colors.primaryForeground : colors.foreground }]}>{option.label}</Text>
+                  </Pressable>
+                );
+              })}
+              {pendingPreset === 'custom' ? (
+                <View style={styles.reminderCustomDateRow}>
+                  <TextInput
+                    accessibilityLabel="Data personalizada do lembrete"
+                    keyboardType="number-pad"
+                    maxLength={10}
+                    onChangeText={(value) => setPendingCustomDate(formatBirthDateInput(value))}
+                    placeholder="DD/MM/AAAA"
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[styles.reminderDateInput, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+                    testID="consultation-pending-reminder-date"
+                    value={pendingCustomDate}
+                  />
+                  <TextInput
+                    accessibilityLabel="Hora personalizada do lembrete"
+                    keyboardType="number-pad"
+                    maxLength={5}
+                    onChangeText={(value) => setPendingCustomTime(formatTimeInput(value))}
+                    placeholder="HH:MM"
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[styles.reminderDateInput, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+                    testID="consultation-pending-reminder-time"
+                    value={pendingCustomTime}
+                  />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
         </View>
 
         {error ? (
@@ -1011,10 +1315,12 @@ function ConsultationStatusBadge({ status }: { status: ConsultationStatus }) {
 
 function ConsultationCard({
   consultation,
+  reminders,
   onDelete,
   onEdit,
 }: {
   consultation: Consultation;
+  reminders: Reminder[];
   onDelete: (consultation: Consultation) => void;
   onEdit: (consultation: Consultation) => void;
 }) {
@@ -1056,6 +1362,17 @@ function ConsultationCard({
         {consultation.notes ? (
           <Text style={[styles.consultationNotes, { color: colors.mutedForeground }]}>{consultation.notes}</Text>
         ) : null}
+        {reminders.length > 0 ? (
+          <View
+            accessibilityLabel={`${reminders.length} lembrete${reminders.length === 1 ? '' : 's'} configurado${reminders.length === 1 ? '' : 's'}`}
+            style={styles.consultationReminderSummary}
+          >
+            <Ionicons name="notifications-outline" size={16} color={colors.primary} />
+            <Text style={[styles.consultationReminderText, { color: colors.mutedForeground }]}>
+              {reminders.map(formatReminderSummary).join(' · ')}
+            </Text>
+          </View>
+        ) : null}
       </View>
       <View style={[styles.consultationActions, { borderTopColor: colors.border }]}>
         <Pressable
@@ -1085,6 +1402,7 @@ function ConsultationCard({
 
 function ConsultationsScreen({
   consultations,
+  reminders,
   onAdd,
   onBack,
   onDelete,
@@ -1092,6 +1410,7 @@ function ConsultationsScreen({
   patient,
 }: {
   consultations: Consultation[];
+  reminders: Reminder[];
   onAdd: () => void;
   onBack: () => void;
   onDelete: (consultation: Consultation) => void;
@@ -1115,7 +1434,13 @@ function ConsultationsScreen({
     <View style={styles.consultationSection}>
       <Text style={[styles.consultationSectionTitle, { color: colors.foreground }]}>{title}</Text>
       {items.length > 0 ? items.map((item) => (
-        <ConsultationCard key={item.id} consultation={item} onDelete={onDelete} onEdit={onEdit} />
+        <ConsultationCard
+          key={item.id}
+          consultation={item}
+          reminders={reminders.filter((reminder) => reminder.consultationId === item.id)}
+          onDelete={onDelete}
+          onEdit={onEdit}
+        />
       )) : (
         <Text style={[styles.consultationEmptyText, { color: colors.mutedForeground }]}>{emptyText}</Text>
       )}
@@ -1382,7 +1707,9 @@ export default function IndexScreen() {
     selectPatient,
     updatePatient,
     deletePatient,
+    getPatientRemovalSummary,
     consultations,
+    reminders,
     createConsultation,
     updateConsultation,
     deleteConsultation,
@@ -1408,13 +1735,16 @@ export default function IndexScreen() {
   }
 
   async function handleConsultationSaved(input: ConsultationFormInput) {
+    const result = editingConsultation
+      ? await updateConsultation(editingConsultation.id, input)
+      : await createConsultation(input);
     if (editingConsultation) {
-      await updateConsultation(editingConsultation.id, input);
       setEditingConsultation(null);
-    } else {
-      await createConsultation(input);
     }
     setConsultationView('list');
+    if (result.warning) {
+      await showUserAlert('Atenção', result.warning);
+    }
   }
 
   function handleDeleteConsultation(consultation: Consultation) {
@@ -1441,10 +1771,24 @@ export default function IndexScreen() {
     );
   }
 
-  function handleDeletePatient(patientToDelete: Patient) {
+  async function handleDeletePatient(patientToDelete: Patient) {
+    let summary: { consultationCount: number; reminderCount: number };
+    try {
+      summary = await getPatientRemovalSummary(patientToDelete.id);
+    } catch (error) {
+      Alert.alert(
+        'Não foi possível verificar os dados',
+        error instanceof Error ? error.message : 'Tente novamente.',
+      );
+      return;
+    }
+
+    const relatedText = summary.consultationCount > 0
+      ? ` Isso também excluirá ${summary.consultationCount} consulta${summary.consultationCount === 1 ? '' : 's'} e ${summary.reminderCount} lembrete${summary.reminderCount === 1 ? '' : 's'} armazenado${summary.reminderCount === 1 ? '' : 's'} neste aparelho.`
+      : '';
     Alert.alert(
       'Excluir familiar?',
-      `Os dados de ${patientToDelete.name} serão removidos deste aparelho.`,
+      `Os dados de ${patientToDelete.name} serão removidos deste aparelho.${relatedText}`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -1565,6 +1909,7 @@ export default function IndexScreen() {
     return (
       <ConsultationForm
         initialConsultation={editingConsultation}
+        initialReminders={reminders.filter((reminder) => reminder.consultationId === editingConsultation.id)}
         onBack={() => {
           setEditingConsultation(null);
           setConsultationView('list');
@@ -1581,6 +1926,7 @@ export default function IndexScreen() {
     return (
       <ConsultationsScreen
         consultations={consultations}
+        reminders={reminders}
         onAdd={() => {
           setEditingConsultation(null);
           setConsultationView('add');
@@ -1697,6 +2043,15 @@ const styles = StyleSheet.create({
   consultationStatusOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   consultationStatusOption: { minHeight: 44, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   consultationStatusOptionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  reminderFields: { gap: 8, marginTop: 10 },
+  reminderOption: { minHeight: 44, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  reminderOptionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  reminderCustomRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 7 },
+  reminderCustomInput: { minHeight: 50, minWidth: 72, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, fontSize: 16, fontFamily: 'Inter_500Medium' },
+  reminderUnitOption: { minHeight: 44, borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },
+  reminderUnitText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
+  reminderCustomDateRow: { flexDirection: 'row', gap: 8 },
+  reminderDateInput: { flex: 1, minHeight: 50, borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, fontSize: 15, fontFamily: 'Inter_500Medium' },
   consultationListContent: { paddingHorizontal: 24 },
   consultationSection: { marginTop: 22, gap: 10 },
   consultationSectionTitle: { fontSize: 18, fontFamily: 'Inter_700Bold' },
@@ -1712,6 +2067,8 @@ const styles = StyleSheet.create({
   consultationDetailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   consultationDetailText: { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: 'Inter_500Medium' },
   consultationNotes: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  consultationReminderSummary: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 2 },
+  consultationReminderText: { flex: 1, fontSize: 12, lineHeight: 18, fontFamily: 'Inter_500Medium' },
   consultationActions: { flexDirection: 'row', borderTopWidth: 1, paddingHorizontal: 10 },
   consultationAction: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8 },
   consultationActionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },

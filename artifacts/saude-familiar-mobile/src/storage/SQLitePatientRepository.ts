@@ -134,6 +134,10 @@ export class SQLitePatientRepository implements PatientRepository {
     await withConsultationWriteLock(async () => {
       if (Platform.OS === 'web') {
         await this.database.withTransactionAsync(async () => {
+          await this.database.runAsync(
+            'DELETE FROM reminders WHERE consultation_id IN (SELECT id FROM consultations WHERE patient_id = ?)',
+            id,
+          );
           await this.database.runAsync('DELETE FROM consultations WHERE patient_id = ?', id);
           await this.database.runAsync('DELETE FROM patients WHERE id = ?', id);
         });
@@ -141,6 +145,10 @@ export class SQLitePatientRepository implements PatientRepository {
       }
 
       await this.database.withExclusiveTransactionAsync(async (transaction) => {
+        await transaction.runAsync(
+          'DELETE FROM reminders WHERE consultation_id IN (SELECT id FROM consultations WHERE patient_id = ?)',
+          id,
+        );
         await transaction.runAsync('DELETE FROM consultations WHERE patient_id = ?', id);
         await transaction.runAsync('DELETE FROM patients WHERE id = ?', id);
       });
