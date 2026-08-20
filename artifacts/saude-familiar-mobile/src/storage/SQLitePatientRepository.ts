@@ -129,6 +129,9 @@ export class SQLitePatientRepository implements PatientRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await this.database.runAsync('DELETE FROM patients WHERE id = ?', id);
+    await this.database.withTransactionAsync(async () => {
+      await this.database.runAsync('DELETE FROM consultations WHERE patient_id = ?', id);
+      await this.database.runAsync('DELETE FROM patients WHERE id = ?', id);
+    });
   }
 }

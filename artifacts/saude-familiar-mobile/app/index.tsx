@@ -113,6 +113,41 @@ function parseCivilDate(value: string): string | null {
   return `${yearText}-${monthText}-${dayText}`;
 }
 
+function parseConsultationDate(value: string): string | null {
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!match) return null;
+
+  const [, dayText, monthText, yearText] = match;
+  const day = Number(dayText);
+  const month = Number(monthText);
+  const year = Number(yearText);
+  if (year < 1900 || year > 2200 || month < 1 || month > 12) {
+    return null;
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return `${yearText}-${monthText}-${dayText}`;
+}
+
+function formatTimeInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+}
+
+function parseConsultationTime(value: string): string | null {
+  if (!value) return null;
+  return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : null;
+}
+
 function formatCivilDate(value: string): string {
   const [year, month, day] = value.split('-');
   return `${day}/${month}/${year}`;
@@ -591,9 +626,15 @@ function ConsultationForm({
       return;
     }
 
-    const civilDate = date.trim() ? parseCivilDate(date) : null;
+    const civilDate = date.trim() ? parseConsultationDate(date) : null;
     if (date.trim() && !civilDate) {
       setError('Informe uma data válida no formato DD/MM/AAAA.');
+      return;
+    }
+
+    const normalizedTime = parseConsultationTime(time.trim());
+    if (time.trim() && !normalizedTime) {
+      setError('Informe uma hora válida no formato HH:MM.');
       return;
     }
 
@@ -605,7 +646,7 @@ function ConsultationForm({
         location: location.trim() || null,
         phone: phone.trim() || null,
         date: civilDate,
-        time: time.trim() || null,
+        time: normalizedTime,
         notes: notes.trim() || null,
         status,
       });
@@ -744,9 +785,9 @@ function ConsultationForm({
           <FieldLabel label="Hora" />
           <TextInput
             accessibilityLabel="Hora da consulta"
-            keyboardType="numbers-and-punctuation"
+            keyboardType="number-pad"
             maxLength={5}
-            onChangeText={setTime}
+            onChangeText={(value) => setTime(formatTimeInput(value))}
             placeholder="HH:MM"
             placeholderTextColor={colors.mutedForeground}
             style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
@@ -1064,7 +1105,10 @@ function ConsultationsScreen({
     .filter(isUpcomingConsultation)
     .sort((left, right) => consultationSortValue(left).localeCompare(consultationSortValue(right)));
   const history = consultations.filter(
-    (item) => item.status === 'completed' || item.status === 'cancelled',
+    (item) =>
+      item.status === 'completed' ||
+      item.status === 'cancelled' ||
+      (item.status === 'scheduled' && item.date !== null && item.date < currentCivilDate()),
   );
 
   const renderSection = (title: string, items: Consultation[], emptyText: string) => (

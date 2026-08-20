@@ -43,7 +43,7 @@ A tabela `caregivers` contém `id`, `name`, `photo_uri`, `created_at` e `updated
 | 4 | Normaliza duplicatas de Caregiver e impõe singleton | Sim |
 | 5 | Cria `consultations` e índice por `patient_id` | Sim |
 
-O PR 1 não precisou de migration de schema para permitir múltiplos Patients, porque a tabela já aceita vários registros e a coluna `notes` já existia no schema. A Sprint 2 adiciona a migration 5 de Consultations de forma incremental, idempotente e transacional, sem foreign key destrutiva ou cascade silenciosa. Medicamentos e Exames deverão criar suas próprias migrations futuras.
+O PR 1 não precisou de migration de schema para permitir múltiplos Patients, porque a tabela já aceita vários registros e a coluna `notes` já existia no schema. A Sprint 2 adiciona a migration 5 de Consultations de forma incremental, idempotente e transacional, sem foreign key destrutiva. Quando o usuário confirma a exclusão explícita de um Patient, suas Consultations vinculadas são removidas na mesma transação SQLite, evitando registros órfãos sem cascade silenciosa. Medicamentos e Exames deverão criar suas próprias migrations futuras.
 
 ## 5. Repositories
 
@@ -55,13 +55,14 @@ A Sprint 2 é o primeiro módulo clínico local e não implementa Medicamentos, 
 
 O primeiro uso segue `boas-vindas → perfil do cuidador → cadastro do primeiro familiar → Home`. Depois que existe um cuidador e pelo menos um Patient, a Home mostra o cuidador e o familiar selecionado.
 
-A Home permite selecionar outro Patient, abrir o gerenciamento de familiares e acessar Consultas. A tela de Consultas mostra no topo o familiar ativo, agrupa os registros em `A agendar`, `Próximas` e `Histórico`, e permite cadastrar, editar status/data/hora e excluir com confirmação explícita. Ao trocar o Patient ativo, o contexto carrega somente as consultas do novo familiar. Se o Patient ativo for excluído, o aplicativo seleciona o primeiro Patient restante; se não restar nenhum, retorna ao cadastro de familiar.
+A Home permite selecionar outro Patient, abrir o gerenciamento de familiares e acessar Consultas. A tela de Consultas mostra no topo o familiar ativo, agrupa os registros em `A agendar`, `Próximas` e `Histórico` — incluindo no Histórico as consultas agendadas com data passada — e permite cadastrar, editar status/data/hora e excluir com confirmação explícita.
+Ao trocar o Patient ativo, o contexto carrega somente as consultas do novo familiar. Se o Patient ativo for excluído, o aplicativo seleciona o primeiro Patient restante; se não restar nenhum, retorna ao cadastro de familiar.
 
 A navegação ainda está concentrada na rota principal para manter o diff pequeno. Uma evolução futura poderá separar as telas em rotas Expo Router quando os módulos clínicos forem introduzidos.
 
 ## 7. Decisões de arquitetura
 
-A decisão principal é separar **Caregiver único por aparelho** de **N Patients** e vincular cada módulo clínico ao `patientId` do familiar ativo. A seleção ativa é estado de interface, não uma relação estrutural `Caregiver : Patient`. Consultas não usam foreign key destrutiva nem cascade silenciosa nesta etapa, preservando os dados existentes e o controle explícito de exclusão.
+A decisão principal é separar **Caregiver único por aparelho** de **N Patients** e vincular cada módulo clínico ao `patientId` do familiar ativo. A seleção ativa é estado de interface, não uma relação estrutural `Caregiver : Patient`. Consultas não usam foreign key destrutiva; a exclusão de dados vinculados ocorre somente após confirmação explícita do Patient e dentro da mesma transação.
 
 A lista usa `FlatList` para evitar renderização manual de listas longas. As ações principais têm labels acessíveis e áreas de toque grandes. A exclusão é confirmada por `Alert` antes da remoção local.
 
