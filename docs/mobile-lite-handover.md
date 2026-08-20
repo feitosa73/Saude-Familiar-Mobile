@@ -4,14 +4,14 @@
 
 O aplicativo está implementado no monorepo `feitosa73/Saude-Familiar-Mobile`, no pacote `artifacts/saude-familiar-mobile`. A stack atual é React Native com Expo SDK 54, Expo Router, TypeScript, `expo-sqlite`, AsyncStorage e o padrão Repository Pattern. O aplicativo continua **Local-Only**: não há backend, autenticação online, sincronização cloud ou envio de dados de saúde para a Internet.
 
-O PR 1 desta janela parte da `main` após o merge do PR #3, que entregou o perfil local de `Caregiver`, as migrations até a versão 4 e a regra de unicidade de um Caregiver por aparelho. A branch de trabalho do PR 1 é `sprint/1c-multiple-patients-local`.
+A `main` atual inclui o PR #5, com perfil local de `Caregiver`, múltiplos Patients e as migrations até a versão 4. A Sprint 2 de Consultas é desenvolvida na branch `sprint/2-consultas-local`, sem alterar diretamente a `main`.
 
 ## 2. Estrutura de pastas relevante
 
 | Caminho | Responsabilidade |
 |---|---|
 | `artifacts/saude-familiar-mobile/app/` | Rotas Expo Router e tela principal atual |
-| `artifacts/saude-familiar-mobile/src/domain/` | Tipos de domínio de `Patient` e `Caregiver` |
+| `artifacts/saude-familiar-mobile/src/domain/` | Tipos de domínio de `Patient`, `Caregiver` e `Consultation` |
 | `artifacts/saude-familiar-mobile/src/repositories/` | Contratos dos repositórios locais |
 | `artifacts/saude-familiar-mobile/src/storage/` | Implementações SQLite e inicialização/migrations |
 | `artifacts/saude-familiar-mobile/src/context/` | Estado local compartilhado com as telas |
@@ -19,7 +19,7 @@ O PR 1 desta janela parte da `main` após o merge do PR #3, que entregou o perfi
 | `.github/workflows/mobile-ci.yml` | Typecheck do workspace e validação Expo |
 | `.github/workflows/android-apk.yml` | Geração de APK release e checksum como artefato |
 
-O PR 1 mantém o fluxo em `app/index.tsx` para evitar uma refatoração ampla de navegação. A tela usa estados internos para alternar entre onboarding, Home, lista de familiares, cadastro e edição.
+As Sprints 1 e 2 mantêm o fluxo em `app/index.tsx` para evitar uma refatoração ampla de navegação. A tela usa estados internos para alternar entre onboarding, Home, familiares e Consultas, com cadastro e edição locais.
 
 ## 3. Entidades atuais
 
@@ -27,7 +27,7 @@ O PR 1 mantém o fluxo em `app/index.tsx` para evitar uma refatoração ampla de
 
 No PR 1, `Patient` mantém os campos existentes de identificação, data de nascimento, informações clínicas legadas e timestamps. O cadastro e a edição passam a aceitar também `notes`, uma observação opcional de texto simples.
 
-As operações locais de Patient são `list`, `getFirst`, `getById`, `create`, `update` e `delete`. A seleção do Patient ativo é uma preferência de interface, armazenada localmente sob a chave `saude-familiar.active-patient-id`, sem alterar a cardinalidade do banco.
+As operações locais de Patient são `list`, `getFirst`, `getById`, `create`, `update` e `delete`. A seleção do Patient ativo é uma preferência de interface, armazenada localmente sob a chave `saude-familiar.active-patient-id`, sem alterar a cardinalidade do banco. `Consultation` representa uma consulta vinculada obrigatoriamente a um `patientId`, com status `pending`, `scheduled`, `completed` ou `cancelled`, e data/hora opcionais.
 
 ## 4. Schema SQLite e migrations
 
@@ -41,32 +41,34 @@ A tabela `caregivers` contém `id`, `name`, `photo_uri`, `created_at` e `updated
 | 2 | Torna `birth_date` opcional sem descartar dados | Sim |
 | 3 | Cria `caregivers` | Sim |
 | 4 | Normaliza duplicatas de Caregiver e impõe singleton | Sim |
+| 5 | Cria `consultations` (`id`, `patient_id`, `specialty`, `professional_name`, `location`, `phone`, `date`, `time`, `notes`, `status`, `created_at`, `updated_at`), aplica `CHECK` para os quatro status e cria `consultations_patient_idx` em `(patient_id, status, date, time)`; execução transacional e idempotente, sem foreign key | Sim |
 
-O PR 1 não precisa de migration de schema para permitir múltiplos Patients, porque a tabela já aceita vários registros e a coluna `notes` já existia no schema. Novos módulos clínicos, como Consultas, Medicamentos e Exames, deverão criar suas próprias migrations incrementais, idempotentes e transacionais.
+O PR 1 não precisou de migration de schema para permitir múltiplos Patients, porque a tabela já aceita vários registros e a coluna `notes` já existia no schema. A Sprint 2 adiciona a migration 5 de Consultations de forma incremental, idempotente e transacional, sem foreign key destrutiva. Quando o usuário confirma a exclusão explícita de um Patient, suas Consultations vinculadas são removidas na mesma transação SQLite, evitando registros órfãos sem cascade silenciosa. Medicamentos e Exames deverão criar suas próprias migrations futuras.
 
 ## 5. Repositories
 
-`SQLitePatientRepository` converte as colunas snake_case do SQLite para o domínio camelCase. A listagem ordena os registros por `created_at`, a seleção usa o `id`, a edição atualiza somente os campos básicos previstos pelo PR 1 e a exclusão remove o registro após confirmação na interface.
+`SQLitePatientRepository` converte as colunas snake_case do SQLite para o domínio camelCase. A listagem ordena os registros por `created_at`, a seleção usa o `id`, a edição atualiza somente os campos básicos previstos pelo PR 1 e a exclusão remove o registro após confirmação na interface. `SQLiteConsultationRepository` expõe `listByPatient`, `getById`, `create`, `update` e `delete`, sempre filtrando por `patientId` no carregamento do familiar ativo.
 
-Nenhum módulo clínico foi criado nesta etapa. Consultas, Medicamentos, Exames e Documentos/Receitas locais deverão possuir entidades, repositories e migrations próprias, sempre com vínculo lógico obrigatório a `patientId`.
+A Sprint 2 é o primeiro módulo clínico local e não implementa Medicamentos, Exames ou Documentos/Receitas. Esses módulos deverão possuir entidades, repositories e migrations próprias, sempre com vínculo lógico obrigatório a `patientId`.
 
 ## 6. Fluxo de navegação atual
 
 O primeiro uso segue `boas-vindas → perfil do cuidador → cadastro do primeiro familiar → Home`. Depois que existe um cuidador e pelo menos um Patient, a Home mostra o cuidador e o familiar selecionado.
 
-A Home permite abrir o gerenciamento de familiares. A lista permite selecionar outro Patient, cadastrar um novo, editar os dados básicos e excluir com confirmação explícita. Se o Patient ativo for excluído, o aplicativo seleciona o primeiro Patient restante; se não restar nenhum, retorna ao cadastro de familiar.
+A Home permite selecionar outro Patient, abrir o gerenciamento de familiares e acessar Consultas. A tela de Consultas mostra no topo o familiar ativo, agrupa os registros em `A agendar`, `Próximas` e `Histórico` — incluindo no Histórico as consultas agendadas com data passada — e permite cadastrar, editar status/data/hora e excluir com confirmação explícita.
+Ao trocar o Patient ativo, o contexto carrega somente as consultas do novo familiar. Se o Patient ativo for excluído, o aplicativo seleciona o primeiro Patient restante; se não restar nenhum, retorna ao cadastro de familiar.
 
 A navegação ainda está concentrada na rota principal para manter o diff pequeno. Uma evolução futura poderá separar as telas em rotas Expo Router quando os módulos clínicos forem introduzidos.
 
 ## 7. Decisões de arquitetura
 
-A decisão principal do PR 1 é separar **Caregiver único por aparelho** de **N Patients**. A seleção ativa é estado de interface, não uma relação estrutural `Caregiver : Patient`. Isso permite evoluir posteriormente para consultas, medicamentos, exames e documentos vinculados a cada `patientId` sem limitar o banco a um único familiar.
+A decisão principal é separar **Caregiver único por aparelho** de **N Patients** e vincular cada módulo clínico ao `patientId` do familiar ativo. A seleção ativa é estado de interface, não uma relação estrutural `Caregiver : Patient`. Consultas não usam foreign key destrutiva; a exclusão de dados vinculados ocorre somente após confirmação explícita do Patient e dentro da mesma transação. As escritas de Consultation e a limpeza de Patient compartilham um mutex em memória; no native a limpeza usa transação exclusiva e no web usa transação comum protegida pelo mutex.
 
 A lista usa `FlatList` para evitar renderização manual de listas longas. As ações principais têm labels acessíveis e áreas de toque grandes. A exclusão é confirmada por `Alert` antes da remoção local.
 
 ## 8. Limitações atuais
 
-A Home ainda não possui Consultas, Medicamentos, Exames ou Documentos/Receitas porque esses módulos foram deliberadamente separados em PRs posteriores. Não há seleção de paciente dentro de módulos clínicos, relacionamento explícito `caregiverId → patientId`, compartilhamento, sincronização, notificações ou OCR.
+A Home agora possui apenas um resumo mínimo de Consultas do Patient ativo. Medicamentos, Exames e Documentos/Receitas continuam fora do escopo. Não há relacionamento explícito `caregiverId → patientId`, compartilhamento, sincronização, notificações, calendário do dispositivo, APIs externas ou OCR.
 
 O avatar opcional do Caregiver permanece modelado, mas ainda não possui interface de captura ou seleção. A edição do Patient nesta etapa cobre apenas nome, data de nascimento e observações.
 
@@ -82,7 +84,7 @@ A exportação web pode depender do artefato WASM do `expo-sqlite` disponível n
 
 | Próxima etapa | Conteúdo |
 |---|---|
-| PR 2 | Consultas por Patient, incluindo status `A agendar` sem data/hora obrigatória |
+| PR 2 | Concluído nesta branch: Consultas locais por Patient, incluindo `A agendar` sem data/hora obrigatória |
 | PR 3 | Medicamentos por Patient, sem catálogo ANVISA e sem OCR |
 | PR 4 | Exames por Patient, incluindo status `A agendar` sem data/hora obrigatória |
 | PR 5 | Documentos/Receitas locais, com foto ou PDF privado, sem OCR e sem nuvem |
@@ -114,4 +116,4 @@ Não há atualmente configuração de Firebase App Distribution no repositório.
 
 Os testes funcionais prioritários do PR 1 são: primeira execução; atualização de uma instalação que já possui Caregiver e Patient; persistência após fechar e reabrir; criação de múltiplos Patients; alternância do Patient ativo; garantia de que dados de um Patient não aparecem em outro; edição de dados; exclusão com confirmação; exclusão do Patient ativo; e retorno ao cadastro quando não houver Patients restantes.
 
-Os próximos PRs deverão acrescentar testes para consulta e exame `A agendar` sem data, vínculo de medicamentos ao Patient correto e associação de documentos ao Patient correto. Os testes atuais de validação automatizada permanecem typecheck, configuração Expo e o workflow GitHub Actions.
+A Sprint 2 deve ser validada com criação de consulta `A agendar` sem data/hora, persistência após reabertura, edição para `Agendada` com data/hora, isolamento ao trocar Patient, criação para um segundo familiar, mudança para `Realizada` no histórico, exclusão confirmada e resumo correto na Home. Os próximos PRs deverão acrescentar testes para medicamentos, exames e documentos vinculados ao Patient correto. Os testes atuais de validação automatizada permanecem typecheck, configuração Expo e os workflows GitHub Actions.
