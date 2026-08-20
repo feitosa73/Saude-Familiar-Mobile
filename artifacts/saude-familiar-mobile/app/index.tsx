@@ -736,7 +736,13 @@ function ConsultationForm({
       return;
     }
 
-    let reminderOffsets = status === 'scheduled' ? scheduledOffsets : [];
+    let reminderOffsets = status === 'scheduled'
+      ? scheduledOffsets.filter((offset) =>
+        SCHEDULED_REMINDER_OPTIONS.some(
+          (option) => option.offset.offsetValue === offset.offsetValue && option.offset.offsetUnit === offset.offsetUnit,
+        ),
+      )
+      : [];
     if (status === 'scheduled' && customScheduledEnabled) {
       const parsedOffset = Number(customOffsetValue);
       if (!Number.isInteger(parsedOffset) || parsedOffset <= 0) {
