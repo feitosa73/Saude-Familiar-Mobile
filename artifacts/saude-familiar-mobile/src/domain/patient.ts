@@ -16,4 +16,7 @@ export type Patient = {
 export type CreatePatientInput = {
   name: string;
   birthDate?: string | null;
+  notes?: string | null;
 };
+
+export type UpdatePatientInput = CreatePatientInput;

@@ -2,6 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  FlatList,
   Image,
   Keyboard,
   Pressable,
@@ -13,14 +15,21 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KeyboardAwareScrollViewCompat } from '@/components/KeyboardAwareScrollViewCompat';
 import type { Caregiver } from '@/domain/caregiver';
-import type { Patient } from '@/domain/patient';
+import type { CreatePatientInput, Patient } from '@/domain/patient';
 import { useColors } from '@/hooks/useColors';
 import { useLocalData } from '@/context/LocalDataContext';
 
 type OnboardingStep = 'welcome' | 'caregiver-form';
+type PatientView = 'home' | 'list' | 'add' | 'edit';
 
 function firstNameOf(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name;
+}
+
+function showUserAlert(title: string, message: string): Promise<void> {
+  return new Promise((resolve) => {
+    Alert.alert(title, message, [{ text: 'OK', onPress: () => resolve() }]);
+  });
 }
 
 function formatBirthDateInput(value: string): string {
@@ -325,16 +334,27 @@ function CaregiverForm({
 }
 
 function PatientForm({
+  initialPatient,
   onBack,
   onSaved,
+  submitLabel = 'Salvar familiar',
+  title = 'Quem você quer acompanhar?',
+  description = 'Cadastre um familiar para começar. Você poderá completar outras informações depois.',
 }: {
+  initialPatient?: Patient;
   onBack?: () => void;
-  onSaved: (name: string, birthDate?: string | null) => Promise<void>;
+  onSaved: (input: CreatePatientInput) => Promise<void>;
+  submitLabel?: string;
+  title?: string;
+  description?: string;
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const [name, setName] = useState('');
-  const [birthDate, setBirthDate] = useState('');
+  const [name, setName] = useState(initialPatient?.name ?? '');
+  const [birthDate, setBirthDate] = useState(
+    initialPatient?.birthDate ? formatCivilDate(initialPatient.birthDate) : '',
+  );
+  const [notes, setNotes] = useState(initialPatient?.notes ?? '');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -355,7 +375,11 @@ function PatientForm({
 
     setIsSaving(true);
     try {
-      await onSaved(name.trim(), civilDate);
+      await onSaved({
+        name: name.trim(),
+        birthDate: civilDate,
+        notes: notes.trim() || null,
+      });
     } catch {
       setError('Não foi possível salvar agora. Tente novamente.');
     } finally {
@@ -394,11 +418,10 @@ function PatientForm({
           <Ionicons name="person-outline" size={30} color={colors.primary} />
         </View>
         <Text style={[styles.formTitle, { color: colors.foreground }]}>
-          Quem você quer acompanhar?
+          {title}
         </Text>
         <Text style={[styles.formDescription, { color: colors.mutedForeground }]}>
-          Cadastre um familiar para começar. Você poderá completar outras informações
-          depois.
+          {description}
         </Text>
 
         <View style={styles.formFields}>
@@ -437,6 +460,23 @@ function PatientForm({
           <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>
             Opcional. Você poderá informar depois.
           </Text>
+
+          <FieldLabel label="Observações" />
+          <TextInput
+            accessibilityLabel="Observações do familiar"
+            multiline
+            onChangeText={setNotes}
+            placeholder="Ex.: informações importantes para o cuidado"
+            placeholderTextColor={colors.mutedForeground}
+            style={[
+              styles.input,
+              styles.notesInput,
+              { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground },
+            ]}
+            testID="patient-notes-input"
+            textAlignVertical="top"
+            value={notes}
+          />
         </View>
 
         {error ? (
@@ -449,7 +489,7 @@ function PatientForm({
         <View style={styles.formAction}>
           <PrimaryButton
             disabled={isSaving}
-            label="Salvar familiar"
+            label={submitLabel}
             onPress={() => void handleSubmit()}
             testID="patient-save"
           />
@@ -465,6 +505,154 @@ function PatientForm({
   );
 }
 
+function PatientsScreen({
+  patients,
+  activePatientId,
+  onBack,
+  onAdd,
+  onEdit,
+  onDelete,
+  onSelect,
+}: {
+  patients: Patient[];
+  activePatientId: string | null;
+  onBack: () => void;
+  onAdd: () => void;
+  onEdit: (patient: Patient) => void;
+  onDelete: (patient: Patient) => void;
+  onSelect: (patient: Patient) => void;
+}) {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[styles.page, { backgroundColor: colors.background }]}>
+      <View style={[styles.managerHeader, { paddingTop: insets.top + 12 }]}>
+        <Pressable
+          accessibilityLabel="Voltar para o espaço do familiar"
+          accessibilityRole="button"
+          onPress={onBack}
+          style={({ pressed }) => [
+            styles.backButton,
+            { backgroundColor: colors.card, borderColor: colors.border },
+            pressed ? styles.pressed : null,
+          ]}
+          testID="patients-back"
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+        </Pressable>
+        <View style={styles.managerHeaderCopy}>
+          <Text style={[styles.homeEyebrow, { color: colors.primary }]}>FAMILIARES</Text>
+          <Text style={[styles.managerTitle, { color: colors.foreground }]}>Quem você acompanha</Text>
+          <Text style={[styles.managerDescription, { color: colors.mutedForeground }]}>
+            Selecione um familiar ou cadastre outra pessoa para organizar seus cuidados.
+          </Text>
+        </View>
+        <Pressable
+          accessibilityLabel="Cadastrar novo familiar"
+          accessibilityRole="button"
+          onPress={onAdd}
+          style={({ pressed }) => [
+            styles.addIconButton,
+            { backgroundColor: colors.primary },
+            pressed ? styles.pressed : null,
+          ]}
+          testID="patient-add"
+        >
+          <Ionicons name="add" size={25} color={colors.primaryForeground} />
+        </Pressable>
+      </View>
+
+      <LocalBadge />
+
+      <FlatList
+        data={patients}
+        style={styles.patientListView}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={[
+          styles.patientList,
+          { paddingBottom: insets.bottom + 24 },
+        ]}
+        renderItem={({ item }) => {
+          const isSelected = item.id === activePatientId;
+          return (
+            <View
+              style={[
+                styles.patientCard,
+                { backgroundColor: colors.card, borderColor: isSelected ? colors.primary : colors.border },
+              ]}
+            >
+              <Pressable
+                accessibilityLabel={`Selecionar ${item.name}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isSelected }}
+                onPress={() => onSelect(item)}
+                style={({ pressed }) => [
+                  styles.patientCardContent,
+                  pressed ? styles.pressed : null,
+                ]}
+                testID={`patient-select-${item.id}`}
+              >
+                <View style={[styles.patientCardIcon, { backgroundColor: colors.secondary }]}>
+                  <Ionicons name="person-outline" size={23} color={colors.primary} />
+                </View>
+                <View style={styles.patientCardCopy}>
+                  <Text style={[styles.patientCardName, { color: colors.foreground }]}>{item.name}</Text>
+                  <Text style={[styles.patientCardMeta, { color: colors.mutedForeground }]}>
+                    {item.birthDate ? `Nascimento: ${formatCivilDate(item.birthDate)}` : 'Data de nascimento não informada'}
+                  </Text>
+                  {item.notes ? (
+                    <Text numberOfLines={2} style={[styles.patientCardNotes, { color: colors.mutedForeground }]}>
+                      {item.notes}
+                    </Text>
+                  ) : null}
+                </View>
+                <Ionicons
+                  name={isSelected ? 'checkmark-circle' : 'chevron-forward'}
+                  size={24}
+                  color={isSelected ? colors.primary : colors.mutedForeground}
+                />
+              </Pressable>
+              <View style={[styles.patientActions, { borderTopColor: colors.border }]}>
+                <Pressable
+                  accessibilityLabel={`Editar ${item.name}`}
+                  accessibilityRole="button"
+                  onPress={() => onEdit(item)}
+                  style={({ pressed }) => [styles.patientAction, pressed ? styles.pressed : null]}
+                  testID={`patient-edit-${item.id}`}
+                >
+                  <Ionicons name="create-outline" size={18} color={colors.primary} />
+                  <Text style={[styles.patientActionText, { color: colors.primary }]}>Editar</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel={`Excluir ${item.name}`}
+                  accessibilityRole="button"
+                  onPress={() => onDelete(item)}
+                  style={({ pressed }) => [styles.patientAction, pressed ? styles.pressed : null]}
+                  testID={`patient-delete-${item.id}`}
+                >
+                  <Ionicons name="trash-outline" size={18} color={colors.destructive} />
+                  <Text style={[styles.patientActionText, { color: colors.destructive }]}>Excluir</Text>
+                </Pressable>
+              </View>
+            </View>
+          );
+        }}
+        ListEmptyComponent={(
+          <View style={styles.emptyPatients}>
+            <Ionicons name="people-outline" size={40} color={colors.mutedForeground} />
+            <Text style={[styles.emptyPatientsTitle, { color: colors.foreground }]}>Nenhum familiar cadastrado</Text>
+            <Text style={[styles.emptyPatientsDescription, { color: colors.mutedForeground }]}>
+              Cadastre uma pessoa para começar a organizar os cuidados.
+            </Text>
+          </View>
+        )}
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
+  );
+}
+
 function FieldLabel({ label, required }: { label: string; required?: boolean }) {
   const colors = useColors();
 
@@ -476,7 +664,15 @@ function FieldLabel({ label, required }: { label: string; required?: boolean }) 
   );
 }
 
-function HomeScreen({ caregiver, patient }: { caregiver: Caregiver; patient: Patient }) {
+function HomeScreen({
+  caregiver,
+  patient,
+  onManagePatients,
+}: {
+  caregiver: Caregiver;
+  patient: Patient;
+  onManagePatients: () => void;
+}) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
@@ -497,7 +693,7 @@ function HomeScreen({ caregiver, patient }: { caregiver: Caregiver; patient: Pat
               Olá, {firstNameOf(caregiver.name)}.
             </Text>
             <Text style={[styles.homeSubtitle, { color: colors.mutedForeground }]}>
-              Você está acompanhando {patient.name}.
+              Você está cuidando da sua família por aqui.
             </Text>
           </View>
           <View style={[styles.homeAvatar, { backgroundColor: colors.primary }]}>
@@ -506,6 +702,32 @@ function HomeScreen({ caregiver, patient }: { caregiver: Caregiver; patient: Pat
         </View>
 
         <LocalBadge />
+
+        <View style={[styles.selectedPatientCard, { backgroundColor: colors.secondary }]}>
+          <View style={styles.selectedPatientCopy}>
+            <Text style={[styles.homeEyebrow, { color: colors.primary }]}>FAMILIAR SELECIONADO</Text>
+            <Text style={[styles.selectedPatientName, { color: colors.secondaryForeground }]}>{patient.name}</Text>
+            <Text style={[styles.selectedPatientMeta, { color: colors.mutedForeground }]}>
+              {patient.birthDate
+                ? `Nascimento: ${formatCivilDate(patient.birthDate)}`
+                : 'Data de nascimento não informada'}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityLabel="Trocar familiar selecionado"
+            accessibilityRole="button"
+            onPress={onManagePatients}
+            style={({ pressed }) => [
+              styles.secondaryAction,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              pressed ? styles.pressed : null,
+            ]}
+            testID="home-manage-patients"
+          >
+            <Ionicons name="swap-horizontal-outline" size={19} color={colors.primary} />
+            <Text style={[styles.secondaryActionText, { color: colors.primary }]}>Trocar</Text>
+          </Pressable>
+        </View>
 
         <View
           style={[
@@ -531,6 +753,21 @@ function HomeScreen({ caregiver, patient }: { caregiver: Caregiver; patient: Pat
             </Text>
           </View>
         </View>
+
+        <Pressable
+          accessibilityLabel="Gerenciar familiares"
+          accessibilityRole="button"
+          onPress={onManagePatients}
+          style={({ pressed }) => [
+            styles.manageButton,
+            { backgroundColor: colors.primary },
+            pressed ? styles.pressed : null,
+          ]}
+          testID="home-patients-button"
+        >
+          <Ionicons name="people-outline" size={21} color={colors.primaryForeground} />
+          <Text style={[styles.manageButtonText, { color: colors.primaryForeground }]}>Gerenciar familiares</Text>
+        </Pressable>
 
         <View style={[styles.infoCard, { backgroundColor: colors.secondary }]}>
           <Ionicons name="shield-checkmark-outline" size={22} color={colors.primary} />
@@ -590,8 +827,58 @@ function DatabaseErrorScreen({ onRetry }: { onRetry: () => void }) {
 }
 
 export default function IndexScreen() {
-  const { status, caregiver, patient, createCaregiver, createPatient, retry } = useLocalData();
+  const {
+    status,
+    caregiver,
+    patients,
+    patient,
+    createCaregiver,
+    createPatient,
+    selectPatient,
+    updatePatient,
+    deletePatient,
+    retry,
+  } = useLocalData();
   const [step, setStep] = useState<OnboardingStep>('welcome');
+  const [patientView, setPatientView] = useState<PatientView>('home');
+  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+
+  async function handlePatientSaved(input: CreatePatientInput) {
+    if (editingPatient) {
+      await updatePatient(editingPatient.id, input);
+      setEditingPatient(null);
+    } else {
+      const { warning } = await createPatient(input);
+      if (warning) {
+        await showUserAlert('Atenção', warning);
+      }
+    }
+    setPatientView('home');
+  }
+
+  function handleDeletePatient(patientToDelete: Patient) {
+    Alert.alert(
+      'Excluir familiar?',
+      `Os dados de ${patientToDelete.name} serão removidos deste aparelho.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Excluir',
+          style: 'destructive',
+          onPress: () => {
+            void deletePatient(patientToDelete.id)
+              .then(() => setPatientView('home'))
+              .catch((error: unknown) => {
+                Alert.alert(
+                  'Não foi possível concluir',
+                  error instanceof Error ? error.message : 'Tente novamente.',
+                );
+              });
+          },
+        },
+      ],
+    );
+  }
 
   if (status === 'loading') {
     return <LoadingScreen />;
@@ -599,10 +886,6 @@ export default function IndexScreen() {
 
   if (status === 'error') {
     return <DatabaseErrorScreen onRetry={() => void retry()} />;
-  }
-
-  if (caregiver && patient) {
-    return <HomeScreen caregiver={caregiver} patient={patient} />;
   }
 
   if (!caregiver) {
@@ -620,11 +903,72 @@ export default function IndexScreen() {
     );
   }
 
+  if (patientView === 'add' || (patients.length === 0 && !patient)) {
+    return (
+      <PatientForm
+        onBack={patients.length > 0 ? () => setPatientView('list') : undefined}
+        onSaved={handlePatientSaved}
+        title={patientView === 'add' ? 'Cadastrar familiar' : undefined}
+        description={
+          patientView === 'add'
+            ? 'Informe os dados básicos. Você poderá completar outras informações depois.'
+            : undefined
+        }
+        submitLabel={patientView === 'add' ? 'Salvar familiar' : undefined}
+      />
+    );
+  }
+
+  if (patientView === 'edit' && editingPatient) {
+    return (
+      <PatientForm
+        initialPatient={editingPatient}
+        onBack={() => {
+          setEditingPatient(null);
+          setPatientView('list');
+        }}
+        onSaved={handlePatientSaved}
+        title="Editar familiar"
+        description="Atualize os dados básicos deste familiar."
+        submitLabel="Salvar alterações"
+      />
+    );
+  }
+
+  if (patientView === 'list' || !patient) {
+    return (
+      <PatientsScreen
+        activePatientId={patient?.id ?? null}
+        onAdd={() => {
+          setEditingPatient(null);
+          setPatientView('add');
+        }}
+        onBack={() => setPatientView(patient ? 'home' : 'add')}
+        onDelete={handleDeletePatient}
+        onEdit={(patientToEdit) => {
+          setEditingPatient(patientToEdit);
+          setPatientView('edit');
+        }}
+        onSelect={(patientToSelect) => {
+          void selectPatient(patientToSelect.id)
+            .then(() => setPatientView('home'))
+            .catch((error: unknown) => {
+              Alert.alert(
+                'Não foi possível selecionar',
+                error instanceof Error ? error.message : 'Tente novamente.',
+              );
+            });
+        }}
+        patients={patients}
+      />
+    );
+  }
+
   return (
-    <PatientForm
-      onSaved={async (name, birthDate) => {
-        await createPatient({ name, birthDate });
-      }}
+    <HomeScreen
+      caregiver={caregiver}
+      onManagePatients={() => setPatientView('list')}
+      patient={patient}
     />
   );
 }
@@ -695,6 +1039,27 @@ const styles = StyleSheet.create({
   primaryButtonText: { fontSize: 16, fontFamily: 'Inter_700Bold' },
   pressed: { opacity: 0.78 },
   formContent: { flexGrow: 1, paddingHorizontal: 24 },
+  notesInput: { minHeight: 96, paddingTop: 16 },
+  managerHeader: { flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 24, gap: 12 },
+  managerHeaderCopy: { flex: 1 },
+  managerTitle: { fontSize: 27, lineHeight: 33, fontFamily: 'Inter_700Bold' },
+  managerDescription: { fontSize: 14, lineHeight: 20, fontFamily: 'Inter_400Regular', marginTop: 6 },
+  addIconButton: { width: 46, height: 46, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  patientListView: { flex: 1, marginTop: 16 },
+  patientList: { paddingHorizontal: 24, gap: 12 },
+  patientCard: { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
+  patientCardContent: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
+  patientCardIcon: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  patientCardCopy: { flex: 1 },
+  patientCardName: { fontSize: 16, fontFamily: 'Inter_700Bold' },
+  patientCardMeta: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  patientCardNotes: { fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  patientActions: { flexDirection: 'row', borderTopWidth: 1, paddingHorizontal: 12 },
+  patientAction: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8, paddingVertical: 12 },
+  patientActionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  emptyPatients: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 44 },
+  emptyPatientsTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', marginTop: 14, textAlign: 'center' },
+  emptyPatientsDescription: { fontSize: 14, lineHeight: 20, fontFamily: 'Inter_400Regular', marginTop: 7, textAlign: 'center' },
   backButton: {
     width: 46,
     height: 46,
@@ -732,7 +1097,15 @@ const styles = StyleSheet.create({
   homeTitle: { fontSize: 30, lineHeight: 36, fontFamily: 'Inter_700Bold' },
   homeSubtitle: { fontSize: 15, lineHeight: 22, fontFamily: 'Inter_400Regular', marginTop: 6 },
   homeAvatar: { width: 56, height: 56, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  readyCard: { borderWidth: 1, borderRadius: 24, padding: 22, marginTop: 28 },
+  selectedPatientCard: { flexDirection: 'row', alignItems: 'center', gap: 14, borderRadius: 20, padding: 18, marginTop: 18 },
+  selectedPatientCopy: { flex: 1 },
+  selectedPatientName: { fontSize: 21, fontFamily: 'Inter_700Bold' },
+  selectedPatientMeta: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_400Regular', marginTop: 4 },
+  secondaryAction: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderRadius: 14, paddingHorizontal: 11, paddingVertical: 9 },
+  secondaryActionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  manageButton: { minHeight: 54, borderRadius: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 16 },
+  manageButtonText: { fontSize: 15, fontFamily: 'Inter_700Bold' },
+  readyCard: { borderWidth: 1, borderRadius: 24, padding: 22, marginTop: 18 },
   readyIcon: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
   readyTitle: { fontSize: 21, fontFamily: 'Inter_700Bold' },
   readyDescription: { fontSize: 15, lineHeight: 22, fontFamily: 'Inter_400Regular', marginTop: 7 },

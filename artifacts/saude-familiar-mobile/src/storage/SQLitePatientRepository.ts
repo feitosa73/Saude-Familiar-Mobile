@@ -1,5 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type { CreatePatientInput, Patient } from '@/domain/patient';
+import type {
+  CreatePatientInput,
+  Patient,
+  UpdatePatientInput,
+} from '@/domain/patient';
 import type { PatientRepository } from '@/repositories/PatientRepository';
 import { createGlobalId } from '@/utils/ids';
 
@@ -38,9 +42,26 @@ function toPatient(row: PatientRow): Patient {
 export class SQLitePatientRepository implements PatientRepository {
   constructor(private readonly database: SQLiteDatabase) {}
 
+  async list(): Promise<Patient[]> {
+    const rows = await this.database.getAllAsync<PatientRow>(
+      'SELECT * FROM patients ORDER BY created_at ASC',
+    );
+
+    return rows.map(toPatient);
+  }
+
   async getFirst(): Promise<Patient | null> {
     const row = await this.database.getFirstAsync<PatientRow>(
       'SELECT * FROM patients ORDER BY created_at ASC LIMIT 1',
+    );
+
+    return row ? toPatient(row) : null;
+  }
+
+  async getById(id: string): Promise<Patient | null> {
+    const row = await this.database.getFirstAsync<PatientRow>(
+      'SELECT * FROM patients WHERE id = ?',
+      id,
     );
 
     return row ? toPatient(row) : null;
@@ -55,7 +76,7 @@ export class SQLitePatientRepository implements PatientRepository {
       bloodType: null,
       allergies: null,
       emergencyContacts: null,
-      notes: null,
+      notes: input.notes ?? null,
       primaryDoctor: null,
       healthInsurance: null,
       healthInsuranceNumber: null,
@@ -84,5 +105,30 @@ export class SQLitePatientRepository implements PatientRepository {
     );
 
     return patient;
+  }
+
+  async update(id: string, input: UpdatePatientInput): Promise<Patient> {
+    const now = new Date().toISOString();
+    await this.database.runAsync(
+      `UPDATE patients
+       SET name = ?, birth_date = ?, notes = ?, updated_at = ?
+       WHERE id = ?`,
+      input.name.trim(),
+      input.birthDate ?? null,
+      input.notes ?? null,
+      now,
+      id,
+    );
+
+    const patient = await this.getById(id);
+    if (!patient) {
+      throw new Error('Familiar não encontrado.');
+    }
+
+    return patient;
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.database.runAsync('DELETE FROM patients WHERE id = ?', id);
   }
 }

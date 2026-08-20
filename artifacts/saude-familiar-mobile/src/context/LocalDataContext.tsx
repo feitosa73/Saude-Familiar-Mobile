@@ -6,6 +6,7 @@ import React, {
   useMemo,
   useState,
 } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSQLiteContext } from 'expo-sqlite';
 import type { Caregiver, CreateCaregiverInput } from '@/domain/caregiver';
 import type { CreatePatientInput, Patient } from '@/domain/patient';
@@ -14,17 +15,40 @@ import { SQLitePatientRepository } from '@/storage/SQLitePatientRepository';
 
 type LocalDataStatus = 'loading' | 'ready' | 'error';
 
+type PatientCreateResult = {
+  patient: Patient;
+  warning: string | null;
+};
+
 type LocalDataContextValue = {
   status: LocalDataStatus;
   caregiver: Caregiver | null;
+  patients: Patient[];
   patient: Patient | null;
   error: string | null;
   createCaregiver: (input: CreateCaregiverInput) => Promise<Caregiver>;
-  createPatient: (input: CreatePatientInput) => Promise<Patient>;
+  createPatient: (input: CreatePatientInput) => Promise<PatientCreateResult>;
+  selectPatient: (id: string) => Promise<void>;
+  updatePatient: (id: string, input: CreatePatientInput) => Promise<Patient>;
+  deletePatient: (id: string) => Promise<void>;
   retry: () => Promise<void>;
 };
 
 const LocalDataContext = createContext<LocalDataContextValue | null>(null);
+const ACTIVE_PATIENT_STORAGE_KEY = 'saude-familiar.active-patient-id';
+
+async function persistActivePatientId(id: string | null): Promise<boolean> {
+  try {
+    if (id) {
+      await AsyncStorage.setItem(ACTIVE_PATIENT_STORAGE_KEY, id);
+    } else {
+      await AsyncStorage.removeItem(ACTIVE_PATIENT_STORAGE_KEY);
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function LocalDataProvider({ children }: { children: React.ReactNode }) {
   const database = useSQLiteContext();
@@ -38,6 +62,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
   );
   const [status, setStatus] = useState<LocalDataStatus>('loading');
   const [caregiver, setCaregiver] = useState<Caregiver | null>(null);
+  const [patients, setPatients] = useState<Patient[]>([]);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,12 +71,23 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     setError(null);
 
     try {
-      const [currentCaregiver, currentPatient] = await Promise.all([
+      const [currentCaregiver, currentPatients] = await Promise.all([
         caregiverRepository.getFirst(),
-        patientRepository.getFirst(),
+        patientRepository.list(),
       ]);
+      let storedPatientId: string | null = null;
+      try {
+        storedPatientId = await AsyncStorage.getItem(ACTIVE_PATIENT_STORAGE_KEY);
+      } catch {
+        storedPatientId = null;
+      }
+      const activePatient =
+        currentPatients.find((item) => item.id === storedPatientId) ??
+        currentPatients[0] ??
+        null;
       setCaregiver(currentCaregiver);
-      setPatient(currentPatient);
+      setPatients(currentPatients);
+      setPatient(activePatient);
       setStatus('ready');
     } catch {
       setStatus('error');
@@ -84,10 +120,14 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     async (input: CreatePatientInput) => {
       try {
         const createdPatient = await patientRepository.create(input);
+        setPatients((currentPatients) => [...currentPatients, createdPatient]);
         setPatient(createdPatient);
-        setError(null);
+        const warning = (await persistActivePatientId(createdPatient.id))
+          ? null
+          : 'Familiar salvo, mas a seleção não será lembrada ao reabrir o aplicativo.';
+        setError(warning);
         setStatus('ready');
-        return createdPatient;
+        return { patient: createdPatient, warning };
       } catch {
         const message = 'Não foi possível salvar o familiar. Tente novamente.';
         setError(message);
@@ -97,17 +137,84 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     [patientRepository],
   );
 
+  const selectPatient = useCallback(
+    async (id: string) => {
+      const selectedPatient = await patientRepository.getById(id);
+      if (!selectedPatient) {
+        throw new Error('Familiar não encontrado.');
+      }
+
+      const activePatientPersisted = await persistActivePatientId(selectedPatient.id);
+      if (!activePatientPersisted) {
+        throw new Error('Não foi possível guardar a seleção deste familiar. Tente novamente.');
+      }
+
+      setPatient(selectedPatient);
+    },
+    [patientRepository],
+  );
+
+  const updatePatient = useCallback(
+    async (id: string, input: CreatePatientInput) => {
+      const updatedPatient = await patientRepository.update(id, input);
+      setPatients((currentPatients) =>
+        currentPatients.map((item) => (item.id === id ? updatedPatient : item)),
+      );
+      setPatient((currentPatient) =>
+        currentPatient?.id === id ? updatedPatient : currentPatient,
+      );
+      return updatedPatient;
+    },
+    [patientRepository],
+  );
+
+  const deletePatient = useCallback(
+    async (id: string) => {
+      await patientRepository.delete(id);
+      const remainingPatients = patients.filter((item) => item.id !== id);
+      setPatients(remainingPatients);
+
+      if (patient?.id === id) {
+        const nextPatient = remainingPatients[0] ?? null;
+        setPatient(nextPatient);
+        const activePatientPersisted = await persistActivePatientId(nextPatient?.id ?? null);
+        if (!activePatientPersisted) {
+          throw new Error(
+            'Familiar excluído, mas não foi possível guardar o próximo selecionado. Tente novamente.',
+          );
+        }
+      }
+    },
+    [patient, patientRepository, patients],
+  );
+
   const value = useMemo(
     () => ({
       status,
       caregiver,
+      patients,
       patient,
       error,
       createCaregiver,
       createPatient,
+      selectPatient,
+      updatePatient,
+      deletePatient,
       retry: loadLocalData,
     }),
-    [caregiver, createCaregiver, createPatient, error, loadLocalData, patient, status],
+    [
+      caregiver,
+      createCaregiver,
+      createPatient,
+      deletePatient,
+      error,
+      loadLocalData,
+      patient,
+      patients,
+      selectPatient,
+      status,
+      updatePatient,
+    ],
   );
 
   return (
