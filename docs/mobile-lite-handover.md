@@ -41,7 +41,7 @@ A tabela `caregivers` contém `id`, `name`, `photo_uri`, `created_at` e `updated
 | 2 | Torna `birth_date` opcional sem descartar dados | Sim |
 | 3 | Cria `caregivers` | Sim |
 | 4 | Normaliza duplicatas de Caregiver e impõe singleton | Sim |
-| 5 | Cria `consultations` e índice por `patient_id` | Sim |
+| 5 | Cria `consultations` (`id`, `patient_id`, `specialty`, `professional_name`, `location`, `phone`, `date`, `time`, `notes`, `status`, `created_at`, `updated_at`), aplica `CHECK` para os quatro status e cria `consultations_patient_idx` em `(patient_id, status, date, time)`; execução transacional e idempotente, sem foreign key | Sim |
 
 O PR 1 não precisou de migration de schema para permitir múltiplos Patients, porque a tabela já aceita vários registros e a coluna `notes` já existia no schema. A Sprint 2 adiciona a migration 5 de Consultations de forma incremental, idempotente e transacional, sem foreign key destrutiva. Quando o usuário confirma a exclusão explícita de um Patient, suas Consultations vinculadas são removidas na mesma transação SQLite, evitando registros órfãos sem cascade silenciosa. Medicamentos e Exames deverão criar suas próprias migrations futuras.
 
