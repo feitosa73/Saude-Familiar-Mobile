@@ -26,6 +26,12 @@ function firstNameOf(name: string): string {
   return name.trim().split(/\s+/)[0] ?? name;
 }
 
+function showUserAlert(title: string, message: string): Promise<void> {
+  return new Promise((resolve) => {
+    Alert.alert(title, message, [{ text: 'OK', onPress: () => resolve() }]);
+  });
+}
+
 function formatBirthDateInput(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 8);
 
@@ -842,7 +848,10 @@ export default function IndexScreen() {
       await updatePatient(editingPatient.id, input);
       setEditingPatient(null);
     } else {
-      await createPatient(input);
+      const { warning } = await createPatient(input);
+      if (warning) {
+        await showUserAlert('Atenção', warning);
+      }
     }
     setPatientView('home');
   }

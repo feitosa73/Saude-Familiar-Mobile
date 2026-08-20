@@ -15,6 +15,11 @@ import { SQLitePatientRepository } from '@/storage/SQLitePatientRepository';
 
 type LocalDataStatus = 'loading' | 'ready' | 'error';
 
+type PatientCreateResult = {
+  patient: Patient;
+  warning: string | null;
+};
+
 type LocalDataContextValue = {
   status: LocalDataStatus;
   caregiver: Caregiver | null;
@@ -22,7 +27,7 @@ type LocalDataContextValue = {
   patient: Patient | null;
   error: string | null;
   createCaregiver: (input: CreateCaregiverInput) => Promise<Caregiver>;
-  createPatient: (input: CreatePatientInput) => Promise<Patient>;
+  createPatient: (input: CreatePatientInput) => Promise<PatientCreateResult>;
   selectPatient: (id: string) => Promise<void>;
   updatePatient: (id: string, input: CreatePatientInput) => Promise<Patient>;
   deletePatient: (id: string) => Promise<void>;
@@ -117,14 +122,12 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
         const createdPatient = await patientRepository.create(input);
         setPatients((currentPatients) => [...currentPatients, createdPatient]);
         setPatient(createdPatient);
-        const activePatientPersisted = await persistActivePatientId(createdPatient.id);
-        setError(
-          activePatientPersisted
-            ? null
-            : 'Familiar salvo, mas a seleção não será lembrada ao reabrir o aplicativo.',
-        );
+        const warning = (await persistActivePatientId(createdPatient.id))
+          ? null
+          : 'Familiar salvo, mas a seleção não será lembrada ao reabrir o aplicativo.';
+        setError(warning);
         setStatus('ready');
-        return createdPatient;
+        return { patient: createdPatient, warning };
       } catch {
         const message = 'Não foi possível salvar o familiar. Tente novamente.';
         setError(message);
