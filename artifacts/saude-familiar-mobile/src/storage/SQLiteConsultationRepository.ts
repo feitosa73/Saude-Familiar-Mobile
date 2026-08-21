@@ -1,4 +1,5 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
+import { Platform } from 'react-native';
 import type {
   Consultation,
   CreateConsultationInput,
@@ -166,8 +167,19 @@ export class SQLiteConsultationRepository implements ConsultationRepository {
   }
 
   async delete(id: string): Promise<void> {
-    await withConsultationWriteLock(() =>
-      this.database.runAsync('DELETE FROM consultations WHERE id = ?', id).then(() => undefined),
-    );
+    await withConsultationWriteLock(async () => {
+      if (Platform.OS === 'web') {
+        await this.database.withTransactionAsync(async () => {
+          await this.database.runAsync('DELETE FROM reminders WHERE consultation_id = ?', id);
+          await this.database.runAsync('DELETE FROM consultations WHERE id = ?', id);
+        });
+        return;
+      }
+
+      await this.database.withExclusiveTransactionAsync(async (transaction) => {
+        await transaction.runAsync('DELETE FROM reminders WHERE consultation_id = ?', id);
+        await transaction.runAsync('DELETE FROM consultations WHERE id = ?', id);
+      });
+    });
   }
 }

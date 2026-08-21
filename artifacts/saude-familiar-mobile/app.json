@@ -17,7 +17,8 @@
       "supportsTablet": false
     },
     "android": {
-      "package": "br.com.fiqueok.saudefamiliar"
+      "package": "br.com.fiqueok.saudefamiliar",
+      "permissions": ["POST_NOTIFICATIONS", "SCHEDULE_EXACT_ALARM"]
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -30,6 +31,7 @@
         }
       ],
       "expo-font",
+      "expo-notifications",
       "expo-web-browser"
     ],
     "experiments": {
