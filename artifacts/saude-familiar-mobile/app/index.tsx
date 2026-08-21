@@ -108,6 +108,10 @@ function pendingAppointmentsLabel(count: number): string {
   return `${count} aguardando agendamento`;
 }
 
+function otherUpcomingAppointmentsLabel(count: number): string {
+  return count === 1 ? '1 outro agendamento' : `${count} outros agendamentos`;
+}
+
 function consultationDateLabel(consultation: Consultation): string | null {
   if (!consultation.date) return null;
   const date = formatCivilDate(consultation.date);
@@ -1676,7 +1680,7 @@ function HomeScreen({
         : 'Nenhum agendamento registrado.',
     appointmentSummary.pendingCount > 0 ? pendingAppointmentsLabel(appointmentSummary.pendingCount) : null,
     appointmentSummary.otherUpcomingCount > 0
-      ? `Mais ${appointmentSummary.otherUpcomingCount} outros agendamentos.`
+      ? `Mais ${otherUpcomingAppointmentsLabel(appointmentSummary.otherUpcomingCount)}.`
       : null,
     'Ver todos',
   ].filter(Boolean).join('. ');
@@ -1827,7 +1831,7 @@ function HomeScreen({
             ) : null}
             {appointmentSummary.otherUpcomingCount > 0 ? (
               <Text style={[styles.homeAppointmentMore, { color: colors.mutedForeground }]}>
-                + {appointmentSummary.otherUpcomingCount} outros agendamentos
+                + {otherUpcomingAppointmentsLabel(appointmentSummary.otherUpcomingCount)}
               </Text>
             ) : null}
             <View style={styles.consultationSummaryLink}>
