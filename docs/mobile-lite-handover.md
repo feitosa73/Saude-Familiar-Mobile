@@ -4,7 +4,7 @@
 
 O aplicativo está implementado no monorepo `feitosa73/Saude-Familiar-Mobile`, no pacote `artifacts/saude-familiar-mobile`. A stack atual é React Native com Expo SDK 54, Expo Router, TypeScript, `expo-sqlite`, AsyncStorage e o padrão Repository Pattern. O aplicativo continua **Local-Only**: não há backend, autenticação online, sincronização cloud ou envio de dados de saúde para a Internet.
 
-A `main` atual inclui as Sprints 1, 2, 3 e 3.1, incorporadas pelo commit `b8777704155d1b74dc665fb87ff8070be59a808b`, com perfil local de `Caregiver`, múltiplos Patients, Consultations locais, Exames representados de forma compatível e lembretes locais. A Sprint 4 de Agendamentos é desenvolvida na branch `sprint/4-agendamentos-consultas-exames`, sem alterar diretamente a `main`.
+A `main` atual inclui as Sprints 1, 2, 3 e 3.1, incorporadas pelo commit `b8777704155d1b74dc665fb87ff8070be59a808b`, com perfil local de `Caregiver`, múltiplos Patients, Consultations locais e lembretes locais. O suporte tipado e unificado a Exames é introduzido pela Sprint 4 de Agendamentos na branch `sprint/4-agendamentos-consultas-exames`, sem alterar diretamente a `main`.
 
 ## 2. Estrutura de pastas relevante
 
