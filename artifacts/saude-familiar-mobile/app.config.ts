@@ -13,6 +13,9 @@ function isCiEnvironment(): boolean {
 function resolveAndroidVersionCode(): number {
   const rawValue = process.env.ANDROID_VERSION_CODE
     ?? process.env.GITHUB_RUN_NUMBER;
+  const sourceName = process.env.ANDROID_VERSION_CODE !== undefined
+    ? 'ANDROID_VERSION_CODE'
+    : 'GITHUB_RUN_NUMBER';
 
   if (rawValue === undefined) {
     if (isCiEnvironment()) {
@@ -26,7 +29,7 @@ function resolveAndroidVersionCode(): number {
 
   if (!isValid) {
     throw new Error(
-      `ANDROID_VERSION_CODE must be a positive integer no greater than ${MAX_ANDROID_VERSION_CODE}; received: ${rawValue}`,
+      `${sourceName} must be a positive integer no greater than ${MAX_ANDROID_VERSION_CODE}; received: ${rawValue}`,
     );
   }
 
