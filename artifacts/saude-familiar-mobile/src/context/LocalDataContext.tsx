@@ -22,6 +22,7 @@ import { SQLiteConsultationRepository } from '@/storage/SQLiteConsultationReposi
 import { SQLiteReminderRepository } from '@/storage/SQLiteReminderRepository';
 import {
   cancelReminderNotifications,
+  clearCancelledReminderIds,
   syncConsultationReminders,
 } from '@/services/reminderCoordinator';
 import type { ReminderSelection } from '@/utils/reminderPlanning';
@@ -91,6 +92,11 @@ async function listRemindersForConsultations(
     consultations.map((consultation) => reminderRepository.listByConsultation(consultation.id)),
   );
   return groupedReminders.flat();
+}
+
+function mergeReminderState(current: Reminder[], replacements: Reminder[]): Reminder[] {
+  const replacementsById = new Map(replacements.map((reminder) => [reminder.id, reminder]));
+  return current.map((reminder) => replacementsById.get(reminder.id) ?? reminder);
 }
 
 export function LocalDataProvider({ children }: { children: React.ReactNode }) {
@@ -261,9 +267,15 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
         reminderRepository,
         relatedConsultations,
       );
-      const cancellationWarning = await cancelReminderNotifications(relatedReminders);
-      if (cancellationWarning) {
-        throw new Error(cancellationWarning);
+      const cancellation = await cancelReminderNotifications(relatedReminders);
+      const cancellationCleanup = await clearCancelledReminderIds({
+        reminders: relatedReminders,
+        cancellation,
+        reminderRepository,
+      });
+      setReminders((currentReminders) => mergeReminderState(currentReminders, cancellationCleanup.reminders));
+      if (cancellationCleanup.warning) {
+        throw new Error(cancellationCleanup.warning);
       }
 
       await patientRepository.delete(id);
@@ -335,9 +347,16 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
 
       const { reminderSelection, ...consultationInput } = input;
       const existingReminders = await reminderRepository.listByConsultation(id);
-      const cancellationWarning = await cancelReminderNotifications(existingReminders);
-      if (cancellationWarning) {
-        throw new Error(cancellationWarning);
+      const cancellation = await cancelReminderNotifications(existingReminders);
+      const cancellationCleanup = await clearCancelledReminderIds({
+        reminders: existingReminders,
+        cancellation,
+        reminderRepository,
+      });
+      const clearedReminders = cancellationCleanup.reminders;
+      setReminders((currentReminders) => mergeReminderState(currentReminders, clearedReminders));
+      if (cancellationCleanup.warning) {
+        throw new Error(cancellationCleanup.warning);
       }
       const updatedConsultation = await consultationRepository.update(id, consultationInput);
       let reminderResult: { reminders: Reminder[]; warning: string | null };
@@ -347,19 +366,19 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
           patientName: patient.name,
           selection: reminderSelection,
           reminderRepository,
-          existingReminders,
+          existingReminders: clearedReminders,
           skipCancellation: true,
         });
       } catch {
         await Promise.all(
-          existingReminders.map((reminder) =>
+          clearedReminders.map((reminder) =>
             reminder.notificationId
               ? reminderRepository.update(reminder.id, { notificationId: null }).catch(() => undefined)
               : undefined,
           ),
         );
         reminderResult = {
-          reminders: existingReminders.map((reminder) => ({ ...reminder, notificationId: null })),
+          reminders: clearedReminders.map((reminder) => ({ ...reminder, notificationId: null })),
           warning: 'Consulta atualizada, mas não foi possível atualizar os lembretes. Tente novamente.',
         };
       }
@@ -383,9 +402,15 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       }
 
       const relatedReminders = await reminderRepository.listByConsultation(id);
-      const cancellationWarning = await cancelReminderNotifications(relatedReminders);
-      if (cancellationWarning) {
-        throw new Error(cancellationWarning);
+      const cancellation = await cancelReminderNotifications(relatedReminders);
+      const cancellationCleanup = await clearCancelledReminderIds({
+        reminders: relatedReminders,
+        cancellation,
+        reminderRepository,
+      });
+      setReminders((currentReminders) => mergeReminderState(currentReminders, cancellationCleanup.reminders));
+      if (cancellationCleanup.warning) {
+        throw new Error(cancellationCleanup.warning);
       }
       await consultationRepository.delete(id);
       setConsultations((currentConsultations) =>

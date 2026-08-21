@@ -25,19 +25,97 @@ function formatConsultationBody(consultation: Consultation, patientName: string)
   return `Lembrete de consulta: ${consultation.specialty} para ${patientName} em ${date}${time}.`;
 }
 
-export async function cancelReminderNotifications(reminders: Reminder[]): Promise<string | null> {
-  const errors: string[] = [];
+export type ReminderCancellationResult = {
+  reminderId: string;
+  hadNotification: boolean;
+  cancelled: boolean;
+  error: string | null;
+};
+
+export type ReminderCancellationSummary = {
+  results: ReminderCancellationResult[];
+  warning: string | null;
+};
+
+export async function cancelReminderNotifications(
+  reminders: Reminder[],
+): Promise<ReminderCancellationSummary> {
+  const results: ReminderCancellationResult[] = [];
   for (const reminder of reminders) {
+    if (!reminder.notificationId) {
+      results.push({
+        reminderId: reminder.id,
+        hadNotification: false,
+        cancelled: true,
+        error: null,
+      });
+      continue;
+    }
+
     try {
       await cancelLocalNotification(reminder.notificationId);
+      results.push({
+        reminderId: reminder.id,
+        hadNotification: true,
+        cancelled: true,
+        error: null,
+      });
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : 'erro desconhecido');
+      results.push({
+        reminderId: reminder.id,
+        hadNotification: true,
+        cancelled: false,
+        error: error instanceof Error ? error.message : 'erro desconhecido',
+      });
     }
   }
 
-  return errors.length > 0
-    ? 'Não foi possível cancelar uma ou mais notificações. Os lembretes atuais foram mantidos; tente novamente.'
-    : null;
+  const failedCount = results.filter((result) => result.hadNotification && !result.cancelled).length;
+  return {
+    results,
+    warning: failedCount > 0
+      ? failedCount === 1
+        ? 'Não foi possível cancelar uma notificação local. O lembrete correspondente foi mantido; tente novamente.'
+        : `Não foi possível cancelar ${failedCount} notificações locais. Os lembretes correspondentes foram mantidos; tente novamente.`
+      : null,
+  };
+}
+
+export async function clearCancelledReminderIds(input: {
+  reminders: Reminder[];
+  cancellation: ReminderCancellationSummary;
+  reminderRepository: ReminderRepository;
+}): Promise<{ reminders: Reminder[]; warning: string | null }> {
+  const nextReminders = input.reminders.map((reminder) => ({ ...reminder }));
+  const resultById = new Map(input.cancellation.results.map((result) => [result.reminderId, result]));
+  const clearFailures: string[] = [];
+
+  for (const reminder of nextReminders) {
+    const result = resultById.get(reminder.id);
+    if (!result?.hadNotification || !result.cancelled) continue;
+
+    try {
+      await input.reminderRepository.update(reminder.id, { notificationId: null });
+      reminder.notificationId = null;
+    } catch (error) {
+      clearFailures.push(error instanceof Error ? error.message : 'erro desconhecido');
+    }
+  }
+
+  const warnings: string[] = [];
+  if (input.cancellation.warning) warnings.push(input.cancellation.warning);
+  if (clearFailures.length > 0) {
+    warnings.push(
+      clearFailures.length === 1
+        ? 'Uma notificação foi cancelada, mas não foi possível atualizar sua referência no armazenamento local.'
+        : `${clearFailures.length} notificações foram canceladas, mas não foi possível atualizar suas referências no armazenamento local.`,
+    );
+  }
+
+  return {
+    reminders: nextReminders,
+    warning: warnings.length > 0 ? warnings.join(' ') : null,
+  };
 }
 
 export async function syncConsultationReminders(input: {
@@ -48,13 +126,20 @@ export async function syncConsultationReminders(input: {
   existingReminders?: Reminder[];
   skipCancellation?: boolean;
 }): Promise<{ reminders: Reminder[]; warning: string | null }> {
-  const existingReminders = input.existingReminders ?? await input.reminderRepository.listByConsultation(input.consultation.id);
-  const cancellationWarning = input.skipCancellation
-    ? null
-    : await cancelReminderNotifications(existingReminders);
-  if (cancellationWarning) {
-    return { reminders: existingReminders, warning: cancellationWarning };
+  let existingReminders = input.existingReminders ?? await input.reminderRepository.listByConsultation(input.consultation.id);
+  if (!input.skipCancellation) {
+    const cancellation = await cancelReminderNotifications(existingReminders);
+    const cleanup = await clearCancelledReminderIds({
+      reminders: existingReminders,
+      cancellation,
+      reminderRepository: input.reminderRepository,
+    });
+    existingReminders = cleanup.reminders;
+    if (cleanup.warning) {
+      return { reminders: existingReminders, warning: cleanup.warning };
+    }
   }
+
   const plan = buildReminderPlan(input.consultation, input.selection);
   const persistedReminders = await input.reminderRepository.replaceForConsultation(
     input.consultation.id,
@@ -69,7 +154,6 @@ export async function syncConsultationReminders(input: {
   );
 
   const warnings: string[] = [];
-  if (cancellationWarning) warnings.push(cancellationWarning);
   if (plan.skippedPastCount > 0) {
     warnings.push(
       plan.skippedPastCount === 1
@@ -107,7 +191,6 @@ export async function syncConsultationReminders(input: {
     };
   }
 
-  const scheduledNotificationIds: string[] = [];
   const scheduledReminders: Reminder[] = [];
   try {
     for (const reminder of persistedReminders) {
@@ -117,32 +200,42 @@ export async function syncConsultationReminders(input: {
         reminderId: reminder.id,
         consultationId: reminder.consultationId,
       });
-      scheduledNotificationIds.push(notificationId);
+      const scheduledReminder = { ...reminder, notificationId };
+      scheduledReminders.push(scheduledReminder);
       await input.reminderRepository.update(reminder.id, { notificationId });
       reminder.notificationId = notificationId;
-      scheduledReminders.push(reminder);
     }
   } catch (error) {
-    for (const notificationId of scheduledNotificationIds) {
-      try {
-        await cancelLocalNotification(notificationId);
-      } catch {
-        // Preserve the local records and surface the scheduling failure below.
-      }
-    }
+    const persistenceFailures: string[] = [];
     for (const reminder of scheduledReminders) {
       try {
-        await input.reminderRepository.update(reminder.id, { notificationId: null });
-        reminder.notificationId = null;
-      } catch {
-        // Keep the warning focused on the original scheduling failure.
+        await input.reminderRepository.update(reminder.id, { notificationId: reminder.notificationId });
+      } catch (persistenceError) {
+        persistenceFailures.push(
+          persistenceError instanceof Error ? persistenceError.message : 'erro desconhecido',
+        );
       }
+    }
+
+    const cancellation = await cancelReminderNotifications(scheduledReminders);
+    const cleanup = await clearCancelledReminderIds({
+      reminders: scheduledReminders,
+      cancellation,
+      reminderRepository: input.reminderRepository,
+    });
+    for (const reminder of cleanup.reminders) {
+      const persistedReminder = persistedReminders.find((item) => item.id === reminder.id);
+      if (persistedReminder) persistedReminder.notificationId = reminder.notificationId;
     }
 
     const message = error instanceof LocalNotificationPermissionError
       ? 'A consulta foi salva, mas as notificações estão desativadas neste aparelho.'
       : 'A consulta foi salva, mas não foi possível agendar todos os lembretes.';
     warnings.push(message);
+    if (persistenceFailures.length > 0) {
+      warnings.push('Não foi possível preservar uma ou mais referências de notificação no armazenamento local.');
+    }
+    if (cleanup.warning) warnings.push(cleanup.warning);
   }
 
   return {
