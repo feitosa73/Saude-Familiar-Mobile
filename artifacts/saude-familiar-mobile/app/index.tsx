@@ -18,6 +18,7 @@ import type { Caregiver } from '@/domain/caregiver';
 import type {
   Consultation,
   ConsultationStatus,
+  ConsultationType,
   CreateConsultationInput,
 } from '@/domain/consultation';
 import {
@@ -77,10 +78,15 @@ const REMINDER_ALERT_MODE_OPTIONS: Array<{
 
 const CONSULTATION_STATUS_LABELS: Record<ConsultationStatus, string> = {
   pending: 'A agendar',
-  scheduled: 'Agendada',
-  completed: 'Realizada',
-  cancelled: 'Cancelada',
+  scheduled: 'Agendado',
+  completed: 'Realizado',
+  cancelled: 'Cancelado',
 };
+
+const APPOINTMENT_TYPE_OPTIONS: Array<{ value: ConsultationType; label: string }> = [
+  { value: 'consultation', label: 'Consulta' },
+  { value: 'exam', label: 'Exame' },
+];
 
 const CONSULTATION_STATUSES: ConsultationStatus[] = [
   'pending',
@@ -91,6 +97,10 @@ const CONSULTATION_STATUSES: ConsultationStatus[] = [
 
 function consultationStatusLabel(status: ConsultationStatus): string {
   return CONSULTATION_STATUS_LABELS[status];
+}
+
+function consultationTypeLabel(type: ConsultationType): string {
+  return type === 'exam' ? 'Exame' : 'Consulta';
 }
 
 function consultationDateLabel(consultation: Consultation): string | null {
@@ -735,6 +745,7 @@ function ConsultationForm({
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const [type, setType] = useState<ConsultationType>(initialConsultation?.type ?? 'consultation');
   const [specialty, setSpecialty] = useState(initialConsultation?.specialty ?? '');
   const [professionalName, setProfessionalName] = useState(initialConsultation?.professionalName ?? '');
   const [location, setLocation] = useState(initialConsultation?.location ?? '');
@@ -792,7 +803,7 @@ function ConsultationForm({
     setError(null);
 
     if (specialty.trim().length < 2) {
-      setError('Informe a especialidade da consulta.');
+      setError(type === 'exam' ? 'Informe o nome do exame.' : 'Informe a especialidade da consulta.');
       return;
     }
 
@@ -850,15 +861,16 @@ function ConsultationForm({
     }
 
     if (status === 'scheduled' && reminderOffsets.length > 0 && (!civilDate || !normalizedTime)) {
-      setError('Informe data e hora da consulta antes de configurar lembretes.');
+      setError('Informe data e hora do agendamento antes de configurar lembretes.');
       return;
     }
 
     setIsSaving(true);
     try {
       await onSaved({
+        type,
         specialty: specialty.trim(),
-        professionalName: professionalName.trim() || null,
+        professionalName: type === 'consultation' ? professionalName.trim() || null : null,
         location: location.trim() || null,
         phone: phone.trim() || null,
         date: civilDate,
@@ -873,7 +885,7 @@ function ConsultationForm({
         },
       });
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar a consulta.');
+      setError(saveError instanceof Error ? saveError.message : 'Não foi possível salvar o agendamento.');
     } finally {
       setIsSaving(false);
     }
@@ -891,7 +903,7 @@ function ConsultationForm({
         showsVerticalScrollIndicator={false}
       >
         <Pressable
-          accessibilityLabel="Voltar para Consultas"
+          accessibilityLabel="Voltar para Agendamentos"
           accessibilityRole="button"
           onPress={onBack}
           style={({ pressed }) => [
@@ -911,13 +923,43 @@ function ConsultationForm({
         <Text style={[styles.formDescription, { color: colors.mutedForeground }]}>{description}</Text>
 
         <View style={styles.formFields}>
-          <FieldLabel label="Especialidade" required />
+          <FieldLabel label="O que deseja registrar?" required />
+          <View style={styles.consultationTypeOptions}>
+            {APPOINTMENT_TYPE_OPTIONS.map((option) => {
+              const isSelected = option.value === type;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityLabel={option.label}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: isSelected }}
+                  onPress={() => setType(option.value)}
+                  style={({ pressed }) => [
+                    styles.consultationTypeOption,
+                    {
+                      backgroundColor: isSelected ? colors.primary : colors.card,
+                      borderColor: isSelected ? colors.primary : colors.border,
+                    },
+                    pressed ? styles.pressed : null,
+                  ]}
+                  testID={`appointment-type-${option.value}`}
+                >
+                  <Ionicons name={option.value === 'exam' ? 'flask-outline' : 'medical-outline'} size={18} color={isSelected ? colors.primaryForeground : colors.primary} />
+                  <Text style={[styles.consultationTypeOptionText, { color: isSelected ? colors.primaryForeground : colors.foreground }]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <FieldLabel label={type === 'exam' ? 'Nome do exame' : 'Especialidade'} required />
           <TextInput
-            accessibilityLabel="Especialidade da consulta"
+            accessibilityLabel={type === 'exam' ? 'Nome do exame' : 'Especialidade da consulta'}
             autoCapitalize="words"
             autoCorrect={false}
             onChangeText={setSpecialty}
-            placeholder="Ex.: Cardiologista"
+            placeholder={type === 'exam' ? 'Ex.: Hemograma' : 'Ex.: Cardiologista'}
             placeholderTextColor={colors.mutedForeground}
             style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
             testID="consultation-specialty-input"
@@ -956,21 +998,25 @@ function ConsultationForm({
             Em “A agendar”, data e hora podem ficar vazias e ser preenchidas depois.
           </Text>
 
-          <FieldLabel label="Profissional" />
-          <TextInput
-            accessibilityLabel="Nome do profissional"
-            autoCapitalize="words"
-            onChangeText={setProfessionalName}
-            placeholder="Ex.: Dra. Ana Souza"
-            placeholderTextColor={colors.mutedForeground}
-            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
-            testID="consultation-professional-input"
-            value={professionalName}
-          />
+          {type === 'consultation' ? (
+            <>
+              <FieldLabel label="Profissional" />
+              <TextInput
+                accessibilityLabel="Nome do profissional"
+                autoCapitalize="words"
+                onChangeText={setProfessionalName}
+                placeholder="Ex.: Dra. Ana Souza"
+                placeholderTextColor={colors.mutedForeground}
+                style={[styles.input, { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground }]}
+                testID="consultation-professional-input"
+                value={professionalName}
+              />
+            </>
+          ) : null}
 
-          <FieldLabel label="Local / Unidade" />
+          <FieldLabel label={type === 'exam' ? 'Local / Laboratório' : 'Local / Unidade'} />
           <TextInput
-            accessibilityLabel="Local ou unidade da consulta"
+            accessibilityLabel={type === 'exam' ? 'Local ou laboratório do exame' : 'Local ou unidade da consulta'}
             onChangeText={setLocation}
             placeholder="Ex.: Clínica Central"
             placeholderTextColor={colors.mutedForeground}
@@ -981,7 +1027,7 @@ function ConsultationForm({
 
           <FieldLabel label="Telefone" />
           <TextInput
-            accessibilityLabel="Telefone da consulta"
+            accessibilityLabel="Telefone do agendamento"
             keyboardType="phone-pad"
             onChangeText={setPhone}
             placeholder="Ex.: (11) 99999-9999"
@@ -993,7 +1039,7 @@ function ConsultationForm({
 
           <FieldLabel label="Data" />
           <TextInput
-            accessibilityLabel="Data da consulta"
+            accessibilityLabel="Data do agendamento"
             keyboardType="number-pad"
             maxLength={10}
             onChangeText={(value) => setDate(formatBirthDateInput(value))}
@@ -1006,7 +1052,7 @@ function ConsultationForm({
 
           <FieldLabel label="Hora" />
           <TextInput
-            accessibilityLabel="Hora da consulta"
+            accessibilityLabel="Hora do agendamento"
             keyboardType="number-pad"
             maxLength={5}
             onChangeText={(value) => setTime(formatTimeInput(value))}
@@ -1019,7 +1065,7 @@ function ConsultationForm({
 
           <FieldLabel label="Observações" />
           <TextInput
-            accessibilityLabel="Observações da consulta"
+            accessibilityLabel="Observações do agendamento"
             multiline
             onChangeText={setNotes}
             placeholder="Ex.: levar documentos ou perguntas"
@@ -1035,7 +1081,7 @@ function ConsultationForm({
               <FieldLabel label="Lembretes" />
               <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>Escolha uma ou mais antecedências. Se nada for escolhido, não haverá lembrete.</Text>
               <Pressable
-                accessibilityLabel="Não lembrar desta consulta"
+                accessibilityLabel="Não lembrar deste agendamento"
                 accessibilityRole="button"
                 accessibilityState={{ selected: scheduledOffsets.length === 0 && !customScheduledEnabled }}
                 onPress={() => {
@@ -1139,7 +1185,7 @@ function ConsultationForm({
           ) : status === 'pending' ? (
             <View style={styles.reminderFields}>
               <FieldLabel label="Lembrete para agendar" />
-              <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>A consulta ainda não tem horário. Escolha quando lembrar de realizar o agendamento.</Text>
+              <Text style={[styles.fieldHint, { color: colors.mutedForeground }]}>O agendamento ainda não tem horário. Escolha quando lembrar de realizar o agendamento.</Text>
               {PENDING_REMINDER_OPTIONS.map((option) => {
                 const isSelected = pendingPreset === option.value;
                 return (
@@ -1394,6 +1440,20 @@ function ConsultationStatusBadge({ status }: { status: ConsultationStatus }) {
   );
 }
 
+function ConsultationTypeBadge({ type }: { type: ConsultationType }) {
+  const colors = useColors();
+  const isExam = type === 'exam';
+  return (
+    <View
+      accessibilityLabel={`Tipo: ${consultationTypeLabel(type)}`}
+      style={[styles.consultationTypeBadge, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+    >
+      <Ionicons name={isExam ? 'flask-outline' : 'medical-outline'} size={14} color={colors.primary} />
+      <Text style={[styles.consultationTypeText, { color: colors.secondaryForeground }]}>{consultationTypeLabel(type)}</Text>
+    </View>
+  );
+}
+
 function ConsultationCard({
   consultation,
   reminders,
@@ -1412,6 +1472,7 @@ function ConsultationCard({
     <View style={[styles.consultationCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.consultationCardHeader}>
         <View style={styles.consultationCardCopy}>
+          <ConsultationTypeBadge type={consultation.type} />
           <Text style={[styles.consultationSpecialty, { color: colors.foreground }]}>{consultation.specialty}</Text>
           {consultation.professionalName ? (
             <Text style={[styles.consultationMeta, { color: colors.mutedForeground }]}>
@@ -1457,7 +1518,7 @@ function ConsultationCard({
       </View>
       <View style={[styles.consultationActions, { borderTopColor: colors.border }]}>
         <Pressable
-          accessibilityLabel={`Editar consulta de ${consultation.specialty}`}
+          accessibilityLabel={`Editar ${consultationTypeLabel(consultation.type).toLowerCase()} de ${consultation.specialty}`}
           accessibilityRole="button"
           onPress={() => onEdit(consultation)}
           style={({ pressed }) => [styles.consultationAction, pressed ? styles.pressed : null]}
@@ -1467,7 +1528,7 @@ function ConsultationCard({
           <Text style={[styles.consultationActionText, { color: colors.primary }]}>Editar</Text>
         </Pressable>
         <Pressable
-          accessibilityLabel={`Excluir consulta de ${consultation.specialty}`}
+          accessibilityLabel={`Excluir ${consultationTypeLabel(consultation.type).toLowerCase()} de ${consultation.specialty}`}
           accessibilityRole="button"
           onPress={() => onDelete(consultation)}
           style={({ pressed }) => [styles.consultationAction, pressed ? styles.pressed : null]}
@@ -1541,14 +1602,14 @@ function ConsultationsScreen({
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </Pressable>
         <View style={styles.managerHeaderCopy}>
-          <Text style={[styles.homeEyebrow, { color: colors.primary }]}>CONSULTAS</Text>
-          <Text style={[styles.managerTitle, { color: colors.foreground }]}>Consultas de {patient.name}</Text>
+          <Text style={[styles.homeEyebrow, { color: colors.primary }]}>AGENDAMENTOS</Text>
+          <Text style={[styles.managerTitle, { color: colors.foreground }]}>Agendamentos de {patient.name}</Text>
           <Text style={[styles.managerDescription, { color: colors.mutedForeground }]}>
-            Acompanhe consultas deste familiar, inclusive as que ainda estão a agendar.
+            Acompanhe consultas e exames deste familiar, inclusive os que ainda estão a agendar.
           </Text>
         </View>
         <Pressable
-          accessibilityLabel="Adicionar consulta"
+          accessibilityLabel="Adicionar agendamento"
           accessibilityRole="button"
           onPress={onAdd}
           style={({ pressed }) => [styles.addIconButton, { backgroundColor: colors.primary }, pressed ? styles.pressed : null]}
@@ -1564,9 +1625,9 @@ function ConsultationsScreen({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {renderSection('A agendar', pending, 'Nenhuma consulta aguardando agendamento.')}
-        {renderSection('Próximas', upcoming, 'Nenhuma consulta agendada.')}
-        {renderSection('Histórico', history, 'Nenhuma consulta realizada ou cancelada.')}
+        {renderSection('A agendar', pending, 'Nenhum agendamento aguardando data.')}
+        {renderSection('Próximos', upcoming, 'Nenhum agendamento próximo.')}
+        {renderSection('Histórico', history, 'Nenhum agendamento realizado ou cancelado.')}
       </KeyboardAwareScrollViewCompat>
     </View>
   );
@@ -1697,7 +1758,7 @@ function HomeScreen({
         </Pressable>
 
         <Pressable
-          accessibilityLabel={`Abrir consultas de ${patient.name}`}
+          accessibilityLabel={`Abrir agendamentos de ${patient.name}`}
           accessibilityRole="button"
           onPress={onOpenConsultations}
           style={({ pressed }) => [
@@ -1711,10 +1772,10 @@ function HomeScreen({
             <Ionicons name="calendar-outline" size={23} color={colors.primary} />
           </View>
           <View style={styles.consultationSummaryCopy}>
-            <Text style={[styles.consultationSummaryTitle, { color: colors.foreground }]}>Consultas</Text>
+            <Text style={[styles.consultationSummaryTitle, { color: colors.foreground }]}>Agendamentos</Text>
             <Text style={[styles.consultationSummaryMeta, { color: colors.mutedForeground }]}>
-              {pendingCount === 1 ? '1 consulta a agendar' : `${pendingCount} consultas a agendar`}
-              {nextConsultation ? ` · Próxima: ${consultationDateLabel(nextConsultation) ?? 'data a definir'}` : ''}
+              {pendingCount === 1 ? '1 agendamento a agendar' : `${pendingCount} agendamentos a agendar`}
+              {nextConsultation ? ` · Próximo: ${consultationDateLabel(nextConsultation) ?? 'data a definir'}` : ''}
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={22} color={colors.mutedForeground} />
@@ -1830,7 +1891,7 @@ export default function IndexScreen() {
 
   function handleDeleteConsultation(consultation: Consultation) {
     Alert.alert(
-      'Excluir consulta?',
+      `Excluir ${consultationTypeLabel(consultation.type).toLowerCase()}?`,
       `Os dados de ${consultation.specialty} serão removidos deste aparelho.`,
       [
         { text: 'Cancelar', style: 'cancel' },
@@ -1865,7 +1926,7 @@ export default function IndexScreen() {
     }
 
     const relatedText = summary.consultationCount > 0
-      ? ` Isso também excluirá ${summary.consultationCount} consulta${summary.consultationCount === 1 ? '' : 's'} e ${summary.reminderCount} lembrete${summary.reminderCount === 1 ? '' : 's'} armazenado${summary.reminderCount === 1 ? '' : 's'} neste aparelho.`
+      ? ` Isso também excluirá ${summary.consultationCount} agendamento${summary.consultationCount === 1 ? '' : 's'} e ${summary.reminderCount} lembrete${summary.reminderCount === 1 ? '' : 's'} armazenado${summary.reminderCount === 1 ? '' : 's'} neste aparelho.`
       : '';
     Alert.alert(
       'Excluir familiar?',
@@ -1979,9 +2040,9 @@ export default function IndexScreen() {
       <ConsultationForm
         onBack={() => setConsultationView('list')}
         onSaved={handleConsultationSaved}
-        title="Nova consulta"
-        description={`Cadastre uma consulta para ${patient.name}.`}
-        submitLabel="Salvar consulta"
+        title="Novo agendamento"
+        description={`Cadastre uma consulta ou exame para ${patient.name}.`}
+        submitLabel="Salvar agendamento"
       />
     );
   }
@@ -1996,8 +2057,8 @@ export default function IndexScreen() {
           setConsultationView('list');
         }}
         onSaved={handleConsultationSaved}
-        title="Editar consulta"
-        description={`Atualize os dados da consulta de ${patient.name}.`}
+        title="Editar agendamento"
+        description={`Atualize os dados deste agendamento de ${patient.name}.`}
         submitLabel="Salvar alterações"
       />
     );
@@ -2121,6 +2182,11 @@ const styles = StyleSheet.create({
   emptyPatients: { alignItems: 'center', paddingHorizontal: 24, paddingTop: 44 },
   emptyPatientsTitle: { fontSize: 17, fontFamily: 'Inter_700Bold', marginTop: 14, textAlign: 'center' },
   emptyPatientsDescription: { fontSize: 14, lineHeight: 20, fontFamily: 'Inter_400Regular', marginTop: 7, textAlign: 'center' },
+  consultationTypeOptions: { flexDirection: 'row', gap: 8 },
+  consultationTypeOption: { minHeight: 44, flex: 1, flexDirection: 'row', gap: 7, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  consultationTypeOptionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  consultationTypeBadge: { alignSelf: 'flex-start', minHeight: 26, flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8 },
+  consultationTypeText: { fontSize: 11, fontFamily: 'Inter_700Bold' },
   consultationStatusOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   consultationStatusOption: { minHeight: 44, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   consultationStatusOptionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },

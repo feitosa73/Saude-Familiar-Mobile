@@ -1,9 +1,10 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { Platform } from 'react-native';
-import type {
-  Consultation,
-  CreateConsultationInput,
-  UpdateConsultationInput,
+import {
+  normalizeConsultationType,
+  type Consultation,
+  type CreateConsultationInput,
+  type UpdateConsultationInput,
 } from '@/domain/consultation';
 import type { ConsultationRepository } from '@/repositories/ConsultationRepository';
 import { createGlobalId } from '@/utils/ids';
@@ -12,6 +13,7 @@ import { withConsultationWriteLock } from '@/storage/consultationWriteMutex';
 type ConsultationRow = {
   id: string;
   patient_id: string;
+  type: string | null;
   specialty: string;
   professional_name: string | null;
   location: string | null;
@@ -33,6 +35,7 @@ function toConsultation(row: ConsultationRow): Consultation {
   return {
     id: row.id,
     patientId: row.patient_id,
+    type: normalizeConsultationType(row.type),
     specialty: row.specialty,
     professionalName: row.professional_name,
     location: row.location,
@@ -80,15 +83,17 @@ export class SQLiteConsultationRepository implements ConsultationRepository {
   }
 
   async create(input: CreateConsultationInput): Promise<Consultation> {
+    const type = normalizeConsultationType(input.type);
     const specialty = input.specialty.trim();
     if (!specialty) {
-      throw new Error('Informe a especialidade da consulta.');
+      throw new Error(type === 'exam' ? 'Informe o nome do exame.' : 'Informe a especialidade da consulta.');
     }
 
     const now = new Date().toISOString();
     const consultation: Consultation = {
       id: await createGlobalId(),
       patientId: input.patientId,
+      type,
       specialty,
       professionalName: nullableText(input.professionalName),
       location: nullableText(input.location),
@@ -112,11 +117,12 @@ export class SQLiteConsultationRepository implements ConsultationRepository {
 
       await this.database.runAsync(
         `INSERT INTO consultations (
-          id, patient_id, specialty, professional_name, location, phone,
+          id, patient_id, type, specialty, professional_name, location, phone,
           date, time, notes, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         consultation.id,
         consultation.patientId,
+        consultation.type,
         consultation.specialty,
         consultation.professionalName,
         consultation.location,
@@ -135,16 +141,26 @@ export class SQLiteConsultationRepository implements ConsultationRepository {
   async update(id: string, input: UpdateConsultationInput): Promise<Consultation> {
     const specialty = input.specialty.trim();
     if (!specialty) {
-      throw new Error('Informe a especialidade da consulta.');
+      throw new Error(input.type === 'exam' ? 'Informe o nome do exame.' : 'Informe a especialidade da consulta.');
     }
 
     const now = new Date().toISOString();
-    await withConsultationWriteLock(() =>
-      this.database.runAsync(
+    await withConsultationWriteLock(async () => {
+      const current = await this.database.getFirstAsync<ConsultationRow>(
+        'SELECT * FROM consultations WHERE id = ?',
+        id,
+      );
+      if (!current) {
+        throw new Error('Agendamento não encontrado.');
+      }
+      const type = normalizeConsultationType(input.type ?? current.type);
+
+      await this.database.runAsync(
         `UPDATE consultations
-         SET specialty = ?, professional_name = ?, location = ?, phone = ?,
+         SET type = ?, specialty = ?, professional_name = ?, location = ?, phone = ?,
              date = ?, time = ?, notes = ?, status = ?, updated_at = ?
          WHERE id = ?`,
+        type,
         specialty,
         nullableText(input.professionalName),
         nullableText(input.location),
@@ -155,8 +171,8 @@ export class SQLiteConsultationRepository implements ConsultationRepository {
         input.status,
         now,
         id,
-      ).then(() => undefined),
-    );
+      );
+    });
 
     const consultation = await this.getById(id);
     if (!consultation) {
