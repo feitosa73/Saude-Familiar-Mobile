@@ -4,7 +4,7 @@
 
 O aplicativo está implementado no monorepo `feitosa73/Saude-Familiar-Mobile`, no pacote `artifacts/saude-familiar-mobile`. A stack atual é React Native com Expo SDK 54, Expo Router, TypeScript, `expo-sqlite`, AsyncStorage e o padrão Repository Pattern. O aplicativo continua **Local-Only**: não há backend, autenticação online, sincronização cloud ou envio de dados de saúde para a Internet.
 
-A `main` atual inclui as Sprints 1, 2, 3 e 3.1, incorporadas pelo commit `b8777704155d1b74dc665fb87ff8070be59a808b`, com perfil local de `Caregiver`, múltiplos Patients, Consultations locais e lembretes locais. O suporte tipado e unificado a Exames é introduzido pela Sprint 4 de Agendamentos na branch `sprint/4-agendamentos-consultas-exames`, sem alterar diretamente a `main`.
+A `main` atual inclui as Sprints 1, 2, 3, 3.1, 4 e 4.1, incorporadas pelo commit `6cd3566aa63f42f9bf1e9b1af8f626757250c625`, com perfil local de `Caregiver`, múltiplos Patients, Agendamentos unificados de Consultas e Exames, lembretes locais e resumo contextual de Agendamentos na Home. Esta branch acrescenta apenas o acabamento final de release, sem alterar diretamente a `main`.
 
 ## 2. Estrutura de pastas relevante
 
@@ -60,7 +60,7 @@ A Sprint 2 foi o primeiro módulo clínico local. A Sprint 4 acrescenta Exames d
 
 O primeiro uso segue `boas-vindas → perfil do cuidador → cadastro do primeiro familiar → Home`. Depois que existe um cuidador e pelo menos um Patient, a Home mostra o cuidador e o familiar selecionado.
 
-A Home permite selecionar outro Patient, abrir o gerenciamento de familiares e acessar Agendamentos. A tela única mostra `Agendamentos de {Patient}`, pergunta `O que deseja registrar?` e oferece Consulta ou Exame no mesmo formulário. A listagem agrupa os registros em `A agendar`, `Próximos` e `Histórico`, incluindo itens de ambos os tipos e agendamentos com data passada. O formulário inclui lembretes opcionais: múltiplas antecedências para itens agendados e uma tarefa com data/hora escolhida para itens `A agendar`; os cards diferenciam Consulta e Exame por ícone e label, sem depender somente de cor.
+A Home permite selecionar outro Patient, abrir o gerenciamento de familiares e acessar Agendamentos. Após o onboarding, não mantém o banner persistente `Cadastro concluído`; o familiar selecionado, `Gerenciar familiares` e o resumo de Agendamentos ocupam o fluxo principal. A tela única mostra `Agendamentos de {Patient}`, pergunta `O que deseja registrar?` e oferece Consulta ou Exame no mesmo formulário. A listagem agrupa os registros em `A agendar`, `Próximos` e `Histórico`, incluindo itens de ambos os tipos e agendamentos com data passada. O formulário inclui lembretes opcionais: múltiplas antecedências para itens agendados e uma tarefa com data/hora escolhida para itens `A agendar`; os cards diferenciam Consulta e Exame por ícone e label, sem depender somente de cor.
 Ao trocar o Patient ativo, o contexto carrega somente os Agendamentos do novo familiar. Se o Patient ativo for excluído, o aplicativo seleciona o primeiro Patient restante; se não restar nenhum, retorna ao cadastro de familiar. Com Consultas e Exames no mesmo ciclo de cadastro, acompanhamento, lembretes, realização e cancelamento, esta Sprint fecha o principal ciclo funcional do Mobile Lite 1.0.
 
 A navegação ainda está concentrada na rota principal para manter o diff pequeno. Uma evolução futura poderá separar as telas em rotas Expo Router quando os módulos clínicos forem introduzidos.
@@ -73,7 +73,7 @@ A lista usa `FlatList` para evitar renderização manual de listas longas. As a�
 
 ## 8. Limitações atuais
 
-A Home continua apenas com um resumo mínimo de Agendamentos do Patient ativo; não há dashboard de lembretes. Resultados de Exames, interpretação clínica, comparação, laudos, anexos, Documentos/Receitas, OCR e Medicamentos continuam fora do escopo. As notificações são locais e Android-first; não há notificações remotas, Firebase, backend, compartilhamento, sincronização, calendário do dispositivo ou APIs externas. `silent` usa apenas a notificação; `normal` usa som padrão, vibração e importância HIGH; `highlight` usa som padrão, vibração e importância MAX para solicitar heads-up quando permitido.
+A Home mantém o resumo contextual de Agendamentos do Patient ativo, sem o banner persistente `Cadastro concluído` e sem dashboard de lembretes. Resultados de Exames, interpretação clínica, comparação, laudos, anexos, Documentos/Receitas, OCR e Medicamentos continuam fora do escopo. As notificações são locais e Android-first; não há notificações remotas, Firebase, backend, compartilhamento, sincronização, calendário do dispositivo ou APIs externas. `silent` usa apenas a notificação; `normal` usa som padrão, vibração e importância HIGH; `highlight` usa som padrão, vibração e importância MAX para solicitar heads-up quando permitido.
 
 O avatar opcional do Caregiver permanece modelado, mas ainda não possui interface de captura ou seleção. A edição do Patient nesta etapa cobre apenas nome, data de nascimento e observações.
 
@@ -92,7 +92,9 @@ A exportação web pode depender do artefato WASM do `expo-sqlite` disponível n
 | Sprint 2 | Concluído: Consultas locais por Patient, incluindo `A agendar` sem data/hora obrigatória |
 | Sprint 3 | Concluído: lembretes locais de Consultations com `expo-notifications` |
 | Sprint 3.1 | Concluído: modos `silent`, `normal` e `highlight` para alertas locais |
-| Sprint 4 | Em andamento nesta branch: Agendamentos unificados de Consultas e Exames |
+| Sprint 4 | Concluído: Agendamentos unificados de Consultas e Exames |
+| Sprint 4.1 | Concluído: resumo contextual de Agendamentos na Home |
+| Release 1.0 | Em andamento nesta branch: versionamento Android automático e remoção do banner persistente da Home |
 | Evolução posterior | Medicamentos por Patient; resultados/laudos de Exames; fluxo completo de Documentos/Receitas quando autorizado; rotas separadas, testes instrumentados e canais futuros |
 
 ## 11. Instruções para continuidade
@@ -113,9 +115,11 @@ cd artifacts/saude-familiar-mobile
 pnpm exec expo start --android
 ```
 
-O workflow `Validate Mobile` roda em Pull Requests e em pushes para `main`. Ele instala as dependências com `pnpm install --frozen-lockfile --ignore-scripts`, executa o typecheck do workspace e valida a configuração Expo. O workflow `Build installable APK` é disparado manualmente, em Pull Requests e em pushes para `main`; ele configura Node 22, pnpm 11.22, Java 17, executa `expo prebuild --platform android --no-install --clean`, gera `assembleRelease` e publica o APK com checksum por 14 dias.
+O workflow `Validate Mobile` roda em Pull Requests e em pushes para `main`. Ele instala as dependências com `pnpm install --frozen-lockfile --ignore-scripts`, executa o typecheck do workspace e valida a configuração Expo. O workflow `Build installable APK` é disparado manualmente, em Pull Requests e em pushes para `main`; ele configura Node 22, pnpm 11.22, Java 17, deriva `android.versionCode` de `github.run_number`, valida e registra `Android version: 1.0.0 (N)`, executa `expo prebuild --platform android --no-install --clean`, gera `assembleRelease` e publica o APK com checksum por 14 dias.
 
-Não há atualmente configuração de Firebase App Distribution no repositório. Se essa distribuição for necessária futuramente, deverá ser tratada como mudança de infraestrutura separada, com credenciais protegidas e autorização explícita; não deve ser introduzida no Sprint 1.
+O `versionName` (`1.0.0`) identifica a versão funcional do produto. O `versionCode` é um inteiro positivo e crescente que identifica cada build Android; localmente usa fallback seguro `1`, enquanto o CI usa `GITHUB_RUN_NUMBER` sem exigir commit manual. Como o APK mantém `versionName` e `versionCode` Android válidos e crescentes, permanece compatível com o Firebase App Distribution ou outro distribuidor externo, embora nenhuma integração Firebase seja configurada neste repositório.
+
+Não há atualmente integração automatizada com Firebase App Distribution no repositório. O APK pode ser distribuído por esse serviço externamente porque mantém `versionName = 1.0.0` e `versionCode` crescente por build; a integração de upload, credenciais e grupos de distribuição deverá ser tratada como mudança de infraestrutura separada, com autorização explícita.
 
 ## 12. Pontos que ainda precisam de testes
 

@@ -21,6 +21,8 @@ jobs:
     name: Build installable APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      ANDROID_VERSION_CODE: ${{ github.run_number }}
 
     steps:
       - name: Checkout repository
@@ -54,6 +56,18 @@ jobs:
       - name: Typecheck mobile app
         working-directory: artifacts/saude-familiar-mobile
         run: pnpm run typecheck
+
+      - name: Validate Android version
+        working-directory: artifacts/saude-familiar-mobile
+        run: |
+          pnpm exec expo config --type public --json | sed -n '/^{/,$p' > /tmp/expo-config.json
+          VERSION_NAME=$(node -p "require('/tmp/expo-config.json').version")
+          VERSION_CODE=$(node -p "require('/tmp/expo-config.json').android.versionCode")
+          if ! [[ "$VERSION_CODE" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Invalid Android versionCode: $VERSION_CODE"
+            exit 1
+          fi
+          echo "Android version: ${VERSION_NAME} (${VERSION_CODE})"
 
       - name: Generate Android native project
         working-directory: artifacts/saude-familiar-mobile
