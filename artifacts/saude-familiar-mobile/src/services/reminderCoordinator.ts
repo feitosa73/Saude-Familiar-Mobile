@@ -118,6 +118,57 @@ export async function clearCancelledReminderIds(input: {
   };
 }
 
+export async function restoreCancelledReminderNotifications(input: {
+  reminders: Reminder[];
+  cancellation: ReminderCancellationSummary;
+  consultation: Consultation;
+  patientName: string;
+  reminderRepository: ReminderRepository;
+}): Promise<{ reminders: Reminder[]; warning: string | null }> {
+  const restoredReminders = input.reminders.map((reminder) => ({ ...reminder }));
+  const resultById = new Map(input.cancellation.results.map((result) => [result.reminderId, result]));
+  const failures: string[] = [];
+
+  for (const reminder of input.reminders) {
+    const result = resultById.get(reminder.id);
+    if (!reminder.notificationId || !result?.hadNotification || !result.cancelled) continue;
+
+    let replacementNotificationId: string;
+    try {
+      replacementNotificationId = await scheduleLocalNotification({
+        triggerAt: reminder.triggerAt,
+        body: formatConsultationBody(input.consultation, input.patientName),
+        reminderId: reminder.id,
+        consultationId: reminder.consultationId,
+      });
+    } catch {
+      failures.push(`não foi possível reagendar o lembrete ${reminder.id}`);
+      continue;
+    }
+
+    try {
+      await input.reminderRepository.update(reminder.id, { notificationId: replacementNotificationId });
+      const restoredReminder = restoredReminders.find((item) => item.id === reminder.id);
+      if (restoredReminder) restoredReminder.notificationId = replacementNotificationId;
+    } catch {
+      try {
+        await cancelLocalNotification(replacementNotificationId);
+      } catch {
+        failures.push(`não foi possível persistir nem cancelar o novo agendamento do lembrete ${reminder.id}`);
+        continue;
+      }
+      failures.push(`não foi possível persistir o novo agendamento do lembrete ${reminder.id}`);
+    }
+  }
+
+  return {
+    reminders: restoredReminders,
+    warning: failures.length > 0
+      ? `A operação local falhou e ${failures.join('; ')}.`
+      : null,
+  };
+}
+
 export async function syncConsultationReminders(input: {
   consultation: Consultation;
   patientName: string;

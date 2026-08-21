@@ -23,8 +23,10 @@ import { SQLiteReminderRepository } from '@/storage/SQLiteReminderRepository';
 import {
   cancelReminderNotifications,
   clearCancelledReminderIds,
+  restoreCancelledReminderNotifications,
   syncConsultationReminders,
 } from '@/services/reminderCoordinator';
+import type { ReminderCancellationSummary } from '@/services/reminderCoordinator';
 import type { ReminderSelection } from '@/utils/reminderPlanning';
 
 type LocalDataStatus = 'loading' | 'ready' | 'error';
@@ -97,6 +99,42 @@ async function listRemindersForConsultations(
 function mergeReminderState(current: Reminder[], replacements: Reminder[]): Reminder[] {
   const replacementsById = new Map(replacements.map((reminder) => [reminder.id, reminder]));
   return current.map((reminder) => replacementsById.get(reminder.id) ?? reminder);
+}
+
+async function recoverCancelledReminders(input: {
+  reminders: Reminder[];
+  cancellation: ReminderCancellationSummary;
+  consultations: Consultation[];
+  patientName: string;
+  reminderRepository: SQLiteReminderRepository;
+  originalError: unknown;
+}): Promise<{ reminders: Reminder[]; error: Error }> {
+  const restoredById = new Map<string, Reminder>();
+  const recoveryWarnings: string[] = [];
+  for (const consultation of input.consultations) {
+    const consultationReminders = input.reminders.filter(
+      (reminder) => reminder.consultationId === consultation.id,
+    );
+    if (consultationReminders.length === 0) continue;
+    const recovery = await restoreCancelledReminderNotifications({
+      reminders: consultationReminders,
+      cancellation: input.cancellation,
+      consultation,
+      patientName: input.patientName,
+      reminderRepository: input.reminderRepository,
+    });
+    recovery.reminders.forEach((reminder) => restoredById.set(reminder.id, reminder));
+    if (recovery.warning) recoveryWarnings.push(recovery.warning);
+  }
+
+  const originalMessage = input.originalError instanceof Error
+    ? input.originalError.message
+    : 'A operação local falhou.';
+  const message = [originalMessage, ...recoveryWarnings].filter(Boolean).join(' ');
+  return {
+    reminders: input.reminders.map((reminder) => restoredById.get(reminder.id) ?? reminder),
+    error: new Error(message),
+  };
 }
 
 export function LocalDataProvider({ children }: { children: React.ReactNode }) {
@@ -275,10 +313,32 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       });
       setReminders((currentReminders) => mergeReminderState(currentReminders, cancellationCleanup.reminders));
       if (cancellationCleanup.warning) {
-        throw new Error(cancellationCleanup.warning);
+        const recovery = await recoverCancelledReminders({
+          reminders: relatedReminders,
+          cancellation,
+          consultations: relatedConsultations,
+          patientName: patient?.name ?? 'familiar',
+          reminderRepository,
+          originalError: new Error(cancellationCleanup.warning),
+        });
+        setReminders((currentReminders) => mergeReminderState(currentReminders, recovery.reminders));
+        throw recovery.error;
       }
 
-      await patientRepository.delete(id);
+      try {
+        await patientRepository.delete(id);
+      } catch (error) {
+        const recovery = await recoverCancelledReminders({
+          reminders: relatedReminders,
+          cancellation,
+          consultations: relatedConsultations,
+          patientName: patient?.name ?? 'familiar',
+          reminderRepository,
+          originalError: error,
+        });
+        setReminders((currentReminders) => mergeReminderState(currentReminders, recovery.reminders));
+        throw recovery.error;
+      }
       const remainingPatients = patients.filter((item) => item.id !== id);
       setPatients(remainingPatients);
 
@@ -356,9 +416,32 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       const clearedReminders = cancellationCleanup.reminders;
       setReminders((currentReminders) => mergeReminderState(currentReminders, clearedReminders));
       if (cancellationCleanup.warning) {
-        throw new Error(cancellationCleanup.warning);
+        const recovery = await recoverCancelledReminders({
+          reminders: existingReminders,
+          cancellation,
+          consultations: [currentConsultation],
+          patientName: patient.name,
+          reminderRepository,
+          originalError: new Error(cancellationCleanup.warning),
+        });
+        setReminders((currentReminders) => mergeReminderState(currentReminders, recovery.reminders));
+        throw recovery.error;
       }
-      const updatedConsultation = await consultationRepository.update(id, consultationInput);
+      let updatedConsultation: Consultation;
+      try {
+        updatedConsultation = await consultationRepository.update(id, consultationInput);
+      } catch (error) {
+        const recovery = await recoverCancelledReminders({
+          reminders: existingReminders,
+          cancellation,
+          consultations: [currentConsultation],
+          patientName: patient.name,
+          reminderRepository,
+          originalError: error,
+        });
+        setReminders((currentReminders) => mergeReminderState(currentReminders, recovery.reminders));
+        throw recovery.error;
+      }
       let reminderResult: { reminders: Reminder[]; warning: string | null };
       try {
         reminderResult = await syncConsultationReminders({
@@ -410,9 +493,31 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       });
       setReminders((currentReminders) => mergeReminderState(currentReminders, cancellationCleanup.reminders));
       if (cancellationCleanup.warning) {
-        throw new Error(cancellationCleanup.warning);
+        const recovery = await recoverCancelledReminders({
+          reminders: relatedReminders,
+          cancellation,
+          consultations: [currentConsultation],
+          patientName: patient?.name ?? 'familiar',
+          reminderRepository,
+          originalError: new Error(cancellationCleanup.warning),
+        });
+        setReminders((currentReminders) => mergeReminderState(currentReminders, recovery.reminders));
+        throw recovery.error;
       }
-      await consultationRepository.delete(id);
+      try {
+        await consultationRepository.delete(id);
+      } catch (error) {
+        const recovery = await recoverCancelledReminders({
+          reminders: relatedReminders,
+          cancellation,
+          consultations: [currentConsultation],
+          patientName: patient?.name ?? 'familiar',
+          reminderRepository,
+          originalError: error,
+        });
+        setReminders((currentReminders) => mergeReminderState(currentReminders, recovery.reminders));
+        throw recovery.error;
+      }
       setConsultations((currentConsultations) =>
         currentConsultations.filter((item) => item.id !== id),
       );
