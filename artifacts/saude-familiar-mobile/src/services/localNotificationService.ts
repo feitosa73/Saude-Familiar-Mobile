@@ -1,7 +1,14 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import type { ReminderAlertMode } from '@/domain/reminder';
 
-const CONSULTATION_REMINDER_CHANNEL_ID = 'consultation-reminders';
+export const REMINDER_ALERT_CHANNEL_IDS: Record<ReminderAlertMode, string> = {
+  silent: 'saude-familiar-reminders-silent',
+  normal: 'saude-familiar-reminders-normal',
+  highlight: 'saude-familiar-reminders-highlight',
+};
+
+const DEFAULT_VIBRATION_PATTERN = [0, 250, 250, 250];
 let configured = false;
 
 export class LocalNotificationPermissionError extends Error {
@@ -16,6 +23,8 @@ export async function configureLocalNotifications(): Promise<void> {
 
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
+      // The Android channel controls sound for each alert mode. Keeping this true
+      // allows foreground banners for the silent channel as well.
       shouldPlaySound: true,
       shouldSetBadge: false,
       shouldShowBanner: true,
@@ -24,10 +33,29 @@ export async function configureLocalNotifications(): Promise<void> {
   });
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync(CONSULTATION_REMINDER_CHANNEL_ID, {
-      name: 'Lembretes de consultas',
-      importance: Notifications.AndroidImportance.DEFAULT,
-      vibrationPattern: [0, 250, 250, 250],
+    await Notifications.setNotificationChannelAsync(REMINDER_ALERT_CHANNEL_IDS.silent, {
+      name: 'Lembretes silenciosos',
+      importance: Notifications.AndroidImportance.LOW,
+      sound: null,
+      vibrationPattern: null,
+      enableVibrate: false,
+      enableLights: false,
+      lightColor: '#0a7ea4',
+    });
+    await Notifications.setNotificationChannelAsync(REMINDER_ALERT_CHANNEL_IDS.normal, {
+      name: 'Lembretes normais',
+      importance: Notifications.AndroidImportance.HIGH,
+      sound: 'default',
+      vibrationPattern: DEFAULT_VIBRATION_PATTERN,
+      enableVibrate: true,
+      lightColor: '#0a7ea4',
+    });
+    await Notifications.setNotificationChannelAsync(REMINDER_ALERT_CHANNEL_IDS.highlight, {
+      name: 'Lembretes destacados',
+      importance: Notifications.AndroidImportance.MAX,
+      sound: 'default',
+      vibrationPattern: DEFAULT_VIBRATION_PATTERN,
+      enableVibrate: true,
       lightColor: '#0a7ea4',
     });
   }
@@ -51,6 +79,7 @@ export async function scheduleLocalNotification(input: {
   body: string;
   reminderId: string;
   consultationId: string;
+  alertMode: ReminderAlertMode;
 }): Promise<string> {
   if (Platform.OS === 'web') {
     throw new Error('Notificações locais estão disponíveis no aplicativo Android.');
@@ -70,16 +99,19 @@ export async function scheduleLocalNotification(input: {
     content: {
       title: 'Saúde Familiar',
       body: input.body,
-      sound: 'default',
+      sound: input.alertMode === 'silent' ? false : 'default',
       data: {
         reminderId: input.reminderId,
         consultationId: input.consultationId,
+        alertMode: input.alertMode,
       },
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DATE,
       date: triggerDate,
-      ...(Platform.OS === 'android' ? { channelId: CONSULTATION_REMINDER_CHANNEL_ID } : {}),
+      ...(Platform.OS === 'android'
+        ? { channelId: REMINDER_ALERT_CHANNEL_IDS[input.alertMode] }
+        : {}),
     },
   });
 }

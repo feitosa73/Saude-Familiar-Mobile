@@ -6,6 +6,7 @@ const CAREGIVER_MIGRATION = 3;
 const CAREGIVER_SINGLETON_MIGRATION = 4;
 const CONSULTATIONS_MIGRATION = 5;
 const REMINDERS_MIGRATION = 6;
+const REMINDER_ALERT_MODE_MIGRATION = 7;
 
 async function getLatestMigration(database: SQLiteDatabase): Promise<number> {
   const migration = await database.getFirstAsync<{ version: number }>(
@@ -152,6 +153,22 @@ async function createConsultationsSchema(database: SQLiteDatabase): Promise<void
   });
 }
 
+async function addReminderAlertMode(database: SQLiteDatabase): Promise<void> {
+  await database.withTransactionAsync(async () => {
+    await database.execAsync(`
+      ALTER TABLE reminders
+      ADD COLUMN alert_mode TEXT NOT NULL DEFAULT 'normal'
+      CHECK (alert_mode IN ('silent', 'normal', 'highlight'));
+    `);
+
+    await database.runAsync(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+      REMINDER_ALERT_MODE_MIGRATION,
+      new Date().toISOString(),
+    );
+  });
+}
+
 async function createRemindersSchema(database: SQLiteDatabase): Promise<void> {
   await database.withTransactionAsync(async () => {
     await database.execAsync(`
@@ -214,5 +231,10 @@ export async function initializeDatabase(database: SQLiteDatabase): Promise<void
   }
   if (currentVersion < REMINDERS_MIGRATION) {
     await createRemindersSchema(database);
+    currentVersion = REMINDERS_MIGRATION;
+  }
+  if (currentVersion < REMINDER_ALERT_MODE_MIGRATION) {
+    await addReminderAlertMode(database);
+    currentVersion = REMINDER_ALERT_MODE_MIGRATION;
   }
 }

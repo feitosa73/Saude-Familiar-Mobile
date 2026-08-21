@@ -141,6 +141,7 @@ export async function restoreCancelledReminderNotifications(input: {
       replacementNotificationId = await scheduleLocalNotification({
         triggerAt: reminder.triggerAt,
         body: formatConsultationBody(input.consultation, input.patientName),
+        alertMode: reminder.alertMode,
         reminderId: reminder.id,
         consultationId: reminder.consultationId,
       });
@@ -206,6 +207,7 @@ export async function syncConsultationReminders(input: {
     plan.drafts.map((draft) => ({
       consultationId: input.consultation.id,
       type: draft.type,
+      alertMode: draft.alertMode,
       triggerAt: draft.triggerAt,
       offsetValue: draft.offsetValue,
       offsetUnit: draft.offsetUnit,
@@ -257,6 +259,7 @@ export async function syncConsultationReminders(input: {
       const notificationId = await scheduleLocalNotification({
         triggerAt: reminder.triggerAt,
         body: formatConsultationBody(input.consultation, input.patientName),
+        alertMode: reminder.alertMode,
         reminderId: reminder.id,
         consultationId: reminder.consultationId,
       });
