@@ -1738,31 +1738,6 @@ function HomeScreen({
           </Pressable>
         </View>
 
-        <View
-          style={[
-            styles.readyCard,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          <View style={[styles.readyIcon, { backgroundColor: colors.accent }]}>
-            <Ionicons name="checkmark-circle" size={28} color={colors.accentForeground} />
-          </View>
-          <Text style={[styles.readyTitle, { color: colors.foreground }]}>
-            Cadastro concluído
-          </Text>
-          <Text style={[styles.readyDescription, { color: colors.mutedForeground }]}>
-            {patient.name} já está pronto para ser acompanhado.
-          </Text>
-          <View style={[styles.patientSummary, { borderTopColor: colors.border }]}>
-            <Ionicons name="calendar-outline" size={18} color={colors.primary} />
-            <Text style={[styles.patientSummaryText, { color: colors.foreground }]}>
-              {patient.birthDate
-                ? `Nascimento: ${formatCivilDate(patient.birthDate)}`
-                : 'Data de nascimento não informada'}
-            </Text>
-          </View>
-        </View>
-
         <Pressable
           accessibilityLabel="Gerenciar familiares"
           accessibilityRole="button"
@@ -2345,12 +2320,6 @@ const styles = StyleSheet.create({
   homeAppointmentMore: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 2 },
   consultationSummaryLink: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 8 },
   consultationSummaryLinkText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
-  readyCard: { borderWidth: 1, borderRadius: 24, padding: 22, marginTop: 18 },
-  readyIcon: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
-  readyTitle: { fontSize: 21, fontFamily: 'Inter_700Bold' },
-  readyDescription: { fontSize: 15, lineHeight: 22, fontFamily: 'Inter_400Regular', marginTop: 7 },
-  patientSummary: { flexDirection: 'row', alignItems: 'center', gap: 9, borderTopWidth: 1, paddingTop: 16, marginTop: 20 },
-  patientSummaryText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
   infoCard: { flexDirection: 'row', gap: 13, borderRadius: 20, padding: 18, marginTop: 16, alignItems: 'flex-start' },
   infoCopy: { flex: 1 },
   infoTitle: { fontSize: 15, fontFamily: 'Inter_700Bold' },
