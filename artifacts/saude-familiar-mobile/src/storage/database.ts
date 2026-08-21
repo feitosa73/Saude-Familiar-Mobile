@@ -7,6 +7,7 @@ const CAREGIVER_SINGLETON_MIGRATION = 4;
 const CONSULTATIONS_MIGRATION = 5;
 const REMINDERS_MIGRATION = 6;
 const REMINDER_ALERT_MODE_MIGRATION = 7;
+const SCHEDULABLE_TYPE_MIGRATION = 8;
 
 async function getLatestMigration(database: SQLiteDatabase): Promise<number> {
   const migration = await database.getFirstAsync<{ version: number }>(
@@ -153,6 +154,22 @@ async function createConsultationsSchema(database: SQLiteDatabase): Promise<void
   });
 }
 
+async function addSchedulableType(database: SQLiteDatabase): Promise<void> {
+  await database.withTransactionAsync(async () => {
+    await database.execAsync(`
+      ALTER TABLE consultations
+      ADD COLUMN type TEXT NOT NULL DEFAULT 'consultation'
+      CHECK (type IN ('consultation', 'exam'));
+    `);
+
+    await database.runAsync(
+      'INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)',
+      SCHEDULABLE_TYPE_MIGRATION,
+      new Date().toISOString(),
+    );
+  });
+}
+
 async function addReminderAlertMode(database: SQLiteDatabase): Promise<void> {
   await database.withTransactionAsync(async () => {
     await database.execAsync(`
@@ -236,5 +253,9 @@ export async function initializeDatabase(database: SQLiteDatabase): Promise<void
   if (currentVersion < REMINDER_ALERT_MODE_MIGRATION) {
     await addReminderAlertMode(database);
     currentVersion = REMINDER_ALERT_MODE_MIGRATION;
+  }
+  if (currentVersion < SCHEDULABLE_TYPE_MIGRATION) {
+    await addSchedulableType(database);
+    currentVersion = SCHEDULABLE_TYPE_MIGRATION;
   }
 }

@@ -14,15 +14,16 @@ import {
 } from '@/utils/reminderPlanning';
 
 function formatConsultationBody(consultation: Consultation, patientName: string): string {
+  const itemLabel = consultation.type === 'exam' ? 'exame' : 'consulta';
   if (consultation.status === 'pending') {
-    return `Lembrete: agendar ${consultation.specialty} para ${patientName}.`;
+    return `Lembrete: agendar ${itemLabel} ${consultation.specialty} para ${patientName}.`;
   }
 
   const date = consultation.date
     ? `${consultation.date.slice(8, 10)}/${consultation.date.slice(5, 7)}/${consultation.date.slice(0, 4)}`
     : 'a definir';
   const time = consultation.time ? ` às ${consultation.time}` : '';
-  return `Lembrete de consulta: ${consultation.specialty} para ${patientName} em ${date}${time}.`;
+  return `Lembrete de ${itemLabel}: ${consultation.specialty} para ${patientName} em ${date}${time}.`;
 }
 
 export type ReminderCancellationResult = {

@@ -370,7 +370,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     async (input: ConsultationSaveInput): Promise<ConsultationSaveResult> => {
       const patientId = patient?.id;
       if (!patientId || !patient) {
-        throw new Error('Selecione um familiar antes de cadastrar uma consulta.');
+        throw new Error('Selecione um familiar antes de cadastrar um agendamento.');
       }
 
       const { reminderSelection, ...consultationInput } = input;
@@ -389,7 +389,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
       } catch {
         reminderResult = {
           reminders: [],
-          warning: 'Consulta salva, mas não foi possível configurar os lembretes. Tente novamente ao editar.',
+          warning: 'Agendamento salvo, mas não foi possível configurar os lembretes. Tente novamente ao editar.',
         };
       }
       setConsultations((currentConsultations) => [...currentConsultations, createdConsultation]);
@@ -403,7 +403,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     async (id: string, input: ConsultationSaveInput): Promise<ConsultationSaveResult> => {
       const currentConsultation = consultations.find((item) => item.id === id);
       if (!currentConsultation || currentConsultation.patientId !== patient?.id || !patient) {
-        throw new Error('Consulta não encontrada para o familiar selecionado.');
+        throw new Error('Agendamento não encontrado para o familiar selecionado.');
       }
 
       const { reminderSelection, ...consultationInput } = input;
@@ -463,7 +463,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
         );
         reminderResult = {
           reminders: clearedReminders.map((reminder) => ({ ...reminder, notificationId: null })),
-          warning: 'Consulta atualizada, mas não foi possível atualizar os lembretes. Tente novamente.',
+          warning: 'Agendamento atualizado, mas não foi possível atualizar os lembretes. Tente novamente.',
         };
       }
       setConsultations((currentConsultations) =>
@@ -482,7 +482,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
     async (id: string) => {
       const currentConsultation = consultations.find((item) => item.id === id);
       if (!currentConsultation || currentConsultation.patientId !== patient?.id) {
-        throw new Error('Consulta não encontrada para o familiar selecionado.');
+        throw new Error('Agendamento não encontrado para o familiar selecionado.');
       }
 
       const relatedReminders = await reminderRepository.listByConsultation(id);
