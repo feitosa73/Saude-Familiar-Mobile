@@ -38,6 +38,7 @@ import {
   type ReminderOffsetSelection,
   type ReminderSelection,
 } from '@/utils/reminderPlanning';
+import { buildHomeAppointmentSummary } from '@/utils/homeAppointmentSummary';
 
 type OnboardingStep = 'welcome' | 'caregiver-form';
 type PatientView = 'home' | 'list' | 'add' | 'edit';
@@ -101,6 +102,14 @@ function consultationStatusLabel(status: ConsultationStatus): string {
 
 function consultationTypeLabel(type: ConsultationType): string {
   return type === 'exam' ? 'Exame' : 'Consulta';
+}
+
+function pendingAppointmentsLabel(count: number): string {
+  return `${count} aguardando agendamento`;
+}
+
+function otherUpcomingAppointmentsLabel(count: number): string {
+  return count === 1 ? '1 outro agendamento' : `${count} outros agendamentos`;
 }
 
 function consultationDateLabel(consultation: Consultation): string | null {
@@ -1659,10 +1668,22 @@ function HomeScreen({
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const pendingCount = consultations.filter((item) => item.status === 'pending').length;
-  const nextConsultation = consultations
-    .filter(isUpcomingConsultation)
-    .sort((left, right) => consultationSortValue(left).localeCompare(consultationSortValue(right)))[0] ?? null;
+  const appointmentSummary = buildHomeAppointmentSummary(consultations);
+  const nextAppointment = appointmentSummary.next;
+  const nextAppointmentDate = nextAppointment ? consultationDateLabel(nextAppointment) : null;
+  const appointmentAccessibilityLabel = [
+    `Agendamentos de ${patient.name}`,
+    nextAppointment
+      ? `Próximo: ${consultationTypeLabel(nextAppointment.type)} ${nextAppointment.specialty}, ${nextAppointmentDate ?? 'data e hora não informadas'}${nextAppointment.location ? `, local ${nextAppointment.location}` : ''}`
+      : appointmentSummary.hasAppointments
+        ? 'Nenhum próximo agendamento.'
+        : 'Nenhum agendamento registrado.',
+    appointmentSummary.pendingCount > 0 ? pendingAppointmentsLabel(appointmentSummary.pendingCount) : null,
+    appointmentSummary.otherUpcomingCount > 0
+      ? `Mais ${otherUpcomingAppointmentsLabel(appointmentSummary.otherUpcomingCount)}.`
+      : null,
+    'Ver todos',
+  ].filter(Boolean).join('. ');
 
   return (
     <View style={[styles.page, { backgroundColor: colors.background }]}>
@@ -1758,7 +1779,7 @@ function HomeScreen({
         </Pressable>
 
         <Pressable
-          accessibilityLabel={`Abrir agendamentos de ${patient.name}`}
+          accessibilityLabel={appointmentAccessibilityLabel}
           accessibilityRole="button"
           onPress={onOpenConsultations}
           style={({ pressed }) => [
@@ -1773,12 +1794,51 @@ function HomeScreen({
           </View>
           <View style={styles.consultationSummaryCopy}>
             <Text style={[styles.consultationSummaryTitle, { color: colors.foreground }]}>Agendamentos</Text>
-            <Text style={[styles.consultationSummaryMeta, { color: colors.mutedForeground }]}>
-              {pendingCount === 1 ? '1 agendamento a agendar' : `${pendingCount} agendamentos a agendar`}
-              {nextConsultation ? ` · Próximo: ${consultationDateLabel(nextConsultation) ?? 'data a definir'}` : ''}
-            </Text>
+            {nextAppointment ? (
+              <>
+                <View style={styles.homeAppointmentTitleRow}>
+                  <View style={[styles.homeAppointmentTypeIcon, { backgroundColor: colors.secondary }]}>
+                    <Ionicons
+                      name={nextAppointment.type === 'exam' ? 'flask-outline' : 'medical-outline'}
+                      size={15}
+                      color={colors.primary}
+                    />
+                  </View>
+                  <Text style={[styles.homeAppointmentTypeText, { color: colors.foreground }]}>
+                    {consultationTypeLabel(nextAppointment.type)} · {nextAppointment.specialty}
+                  </Text>
+                </View>
+                <Text style={[styles.homeAppointmentDate, { color: colors.mutedForeground }]}>
+                  {nextAppointmentDate}
+                </Text>
+                {nextAppointment.location ? (
+                  <Text style={[styles.homeAppointmentLocation, { color: colors.mutedForeground }]}>
+                    {nextAppointment.location}
+                  </Text>
+                ) : null}
+              </>
+            ) : (
+              <Text style={[styles.consultationSummaryMeta, { color: colors.mutedForeground }]}>
+                {appointmentSummary.hasAppointments
+                  ? 'Nenhum próximo agendamento.'
+                  : 'Nenhum agendamento registrado.'}
+              </Text>
+            )}
+            {appointmentSummary.pendingCount > 0 ? (
+              <Text style={[styles.homeAppointmentPending, { color: colors.primary }]}>
+                {pendingAppointmentsLabel(appointmentSummary.pendingCount)}
+              </Text>
+            ) : null}
+            {appointmentSummary.otherUpcomingCount > 0 ? (
+              <Text style={[styles.homeAppointmentMore, { color: colors.mutedForeground }]}>
+                + {otherUpcomingAppointmentsLabel(appointmentSummary.otherUpcomingCount)}
+              </Text>
+            ) : null}
+            <View style={styles.consultationSummaryLink}>
+              <Text style={[styles.consultationSummaryLinkText, { color: colors.primary }]}>Ver todos</Text>
+              <Ionicons name="chevron-forward" size={17} color={colors.primary} />
+            </View>
           </View>
-          <Ionicons name="chevron-forward" size={22} color={colors.mutedForeground} />
         </Pressable>
 
         <View style={[styles.infoCard, { backgroundColor: colors.secondary }]}>
@@ -2271,11 +2331,20 @@ const styles = StyleSheet.create({
   secondaryActionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   manageButton: { minHeight: 54, borderRadius: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginTop: 16 },
   manageButtonText: { fontSize: 15, fontFamily: 'Inter_700Bold' },
-  consultationSummaryCard: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 20, padding: 14, marginTop: 14 },
-  consultationSummaryIcon: { width: 45, height: 45, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  consultationSummaryCard: { minHeight: 76, flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 1, borderRadius: 20, padding: 14, marginTop: 14 },
+  consultationSummaryIcon: { width: 45, height: 45, borderRadius: 15, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   consultationSummaryCopy: { flex: 1 },
   consultationSummaryTitle: { fontSize: 16, fontFamily: 'Inter_700Bold' },
-  consultationSummaryMeta: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 3 },
+  consultationSummaryMeta: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 4 },
+  homeAppointmentTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 7 },
+  homeAppointmentTypeIcon: { width: 25, height: 25, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  homeAppointmentTypeText: { flex: 1, fontSize: 14, lineHeight: 20, fontFamily: 'Inter_700Bold' },
+  homeAppointmentDate: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_600SemiBold', marginTop: 4 },
+  homeAppointmentLocation: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 1 },
+  homeAppointmentPending: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_700Bold', marginTop: 7 },
+  homeAppointmentMore: { fontSize: 12, lineHeight: 18, fontFamily: 'Inter_400Regular', marginTop: 2 },
+  consultationSummaryLink: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 8 },
+  consultationSummaryLinkText: { fontSize: 12, fontFamily: 'Inter_700Bold' },
   readyCard: { borderWidth: 1, borderRadius: 24, padding: 22, marginTop: 18 },
   readyIcon: { width: 54, height: 54, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
   readyTitle: { fontSize: 21, fontFamily: 'Inter_700Bold' },
