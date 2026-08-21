@@ -1,7 +1,9 @@
 import type { ConsultationStatus } from '@/domain/consultation';
-import type {
-  ReminderDraft,
-  ReminderOffsetUnit,
+import {
+  DEFAULT_REMINDER_ALERT_MODE,
+  type ReminderAlertMode,
+  type ReminderDraft,
+  type ReminderOffsetUnit,
 } from '@/domain/reminder';
 
 export type ReminderOffsetSelection = {
@@ -15,6 +17,7 @@ export type ReminderSelection = {
   scheduledOffsets: ReminderOffsetSelection[];
   pendingPreset: PendingReminderPreset;
   pendingCustomTriggerAt: string | null;
+  alertMode: ReminderAlertMode;
 };
 
 export type ReminderPlanResult = {
@@ -104,6 +107,7 @@ export function buildReminderPlan(
       }
       return [{
         type: 'consultation_advance' as const,
+        alertMode: selection.alertMode ?? DEFAULT_REMINDER_ALERT_MODE,
         triggerAt: triggerAt.toISOString(),
         offsetValue: offset.offsetValue,
         offsetUnit: offset.offsetUnit,
@@ -140,6 +144,7 @@ export function buildReminderPlan(
   return {
     drafts: [{
       type: 'scheduling_task',
+      alertMode: selection.alertMode ?? DEFAULT_REMINDER_ALERT_MODE,
       triggerAt: triggerDate.toISOString(),
       offsetValue: null,
       offsetUnit: null,

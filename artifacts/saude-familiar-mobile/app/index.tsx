@@ -20,7 +20,12 @@ import type {
   ConsultationStatus,
   CreateConsultationInput,
 } from '@/domain/consultation';
-import type { Reminder, ReminderOffsetUnit } from '@/domain/reminder';
+import {
+  DEFAULT_REMINDER_ALERT_MODE,
+  type Reminder,
+  type ReminderAlertMode,
+  type ReminderOffsetUnit,
+} from '@/domain/reminder';
 import type { CreatePatientInput, Patient } from '@/domain/patient';
 import { useColors } from '@/hooks/useColors';
 import { useLocalData } from '@/context/LocalDataContext';
@@ -58,6 +63,16 @@ const PENDING_REMINDER_OPTIONS: Array<{ label: string; value: PendingReminderPre
   { label: 'Daqui a 3 dias às 09:00', value: 'three_days' },
   { label: 'Daqui a 1 semana às 09:00', value: 'one_week' },
   { label: 'Data/hora personalizada', value: 'custom' },
+];
+
+const REMINDER_ALERT_MODE_OPTIONS: Array<{
+  value: ReminderAlertMode;
+  label: string;
+  description: string;
+}> = [
+  { value: 'silent', label: 'Silencioso', description: 'Mostrar apenas a notificação.' },
+  { value: 'normal', label: 'Normal', description: 'Som e vibração.' },
+  { value: 'highlight', label: 'Destacado', description: 'Som, vibração e alerta em destaque quando permitido pelo Android.' },
 ];
 
 const CONSULTATION_STATUS_LABELS: Record<ConsultationStatus, string> = {
@@ -206,10 +221,12 @@ function initialReminderSelection(reminders: Reminder[]): ReminderSelection {
       offsetUnit: item.offsetUnit as ReminderOffsetUnit,
     }));
   const pendingReminder = reminders.find((item) => item.type === 'scheduling_task');
+  const reminderWithAlertMode = reminders.find((item) => item.alertMode);
   return {
     scheduledOffsets,
     pendingPreset: pendingReminder ? 'custom' : 'none',
     pendingCustomTriggerAt: pendingReminder?.triggerAt ?? null,
+    alertMode: reminderWithAlertMode?.alertMode ?? DEFAULT_REMINDER_ALERT_MODE,
   };
 }
 
@@ -647,6 +664,58 @@ function PatientForm({
   );
 }
 
+function ReminderAlertModeOptions({
+  value,
+  onChange,
+}: {
+  value: ReminderAlertMode;
+  onChange: (mode: ReminderAlertMode) => void;
+}) {
+  const colors = useColors();
+
+  return (
+    <View style={styles.reminderAlertModeFields}>
+      <FieldLabel label="Como deseja ser avisado?" />
+      {REMINDER_ALERT_MODE_OPTIONS.map((option) => {
+        const isSelected = value === option.value;
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityLabel={option.label}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: isSelected }}
+            onPress={() => onChange(option.value)}
+            style={({ pressed }) => [
+              styles.reminderAlertModeOption,
+              {
+                backgroundColor: isSelected ? colors.primary : colors.card,
+                borderColor: isSelected ? colors.primary : colors.border,
+              },
+              pressed ? styles.pressed : null,
+            ]}
+            testID={`consultation-alert-mode-${option.value}`}
+          >
+            <View style={[
+              styles.reminderAlertModeRadio,
+              { borderColor: isSelected ? colors.primaryForeground : colors.mutedForeground },
+            ]}>
+              {isSelected ? <View style={[styles.reminderAlertModeRadioDot, { backgroundColor: colors.primaryForeground }]} /> : null}
+            </View>
+            <View style={styles.reminderAlertModeCopy}>
+              <Text style={[styles.reminderAlertModeLabel, { color: isSelected ? colors.primaryForeground : colors.foreground }]}>
+                {option.label}
+              </Text>
+              <Text style={[styles.reminderAlertModeDescription, { color: isSelected ? colors.primaryForeground : colors.mutedForeground }]}>
+                {option.description}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function ConsultationForm({
   initialConsultation,
   onBack,
@@ -700,6 +769,9 @@ function ConsultationForm({
     initialSelection.pendingCustomTriggerAt
       ? localTimeInputFromIso(initialSelection.pendingCustomTriggerAt)
       : '',
+  );
+  const [alertMode, setAlertMode] = useState<ReminderAlertMode>(
+    initialSelection.alertMode ?? DEFAULT_REMINDER_ALERT_MODE,
   );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -797,6 +869,7 @@ function ConsultationForm({
           scheduledOffsets: reminderOffsets,
           pendingPreset: status === 'pending' ? pendingPreset : 'none',
           pendingCustomTriggerAt,
+          alertMode,
         },
       });
     } catch (saveError) {
@@ -1061,6 +1134,7 @@ function ConsultationForm({
                   })}
                 </View>
               ) : null}
+              <ReminderAlertModeOptions value={alertMode} onChange={setAlertMode} />
             </View>
           ) : status === 'pending' ? (
             <View style={styles.reminderFields}>
@@ -1115,6 +1189,7 @@ function ConsultationForm({
                   />
                 </View>
               ) : null}
+              <ReminderAlertModeOptions value={alertMode} onChange={setAlertMode} />
             </View>
           ) : null}
         </View>
@@ -2052,6 +2127,13 @@ const styles = StyleSheet.create({
   reminderFields: { gap: 8, marginTop: 10 },
   reminderOption: { minHeight: 44, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   reminderOptionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  reminderAlertModeFields: { gap: 8, marginTop: 12 },
+  reminderAlertModeOption: { minHeight: 44, borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  reminderAlertModeRadio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  reminderAlertModeRadioDot: { width: 10, height: 10, borderRadius: 5 },
+  reminderAlertModeCopy: { flex: 1 },
+  reminderAlertModeLabel: { fontSize: 13, fontFamily: 'Inter_700Bold' },
+  reminderAlertModeDescription: { fontSize: 12, lineHeight: 17, fontFamily: 'Inter_400Regular', marginTop: 2 },
   reminderCustomRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 7 },
   reminderCustomInput: { minHeight: 50, minWidth: 72, borderRadius: 14, borderWidth: 1, paddingHorizontal: 14, fontSize: 16, fontFamily: 'Inter_500Medium' },
   reminderUnitOption: { minHeight: 44, borderWidth: 1, borderRadius: 14, paddingHorizontal: 10, alignItems: 'center', justifyContent: 'center' },

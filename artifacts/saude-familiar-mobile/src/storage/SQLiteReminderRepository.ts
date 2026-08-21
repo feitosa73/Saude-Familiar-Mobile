@@ -1,9 +1,13 @@
 import { Platform } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
-import type {
-  CreateReminderInput,
-  Reminder,
-  ReminderOffsetUnit,
+import {
+  DEFAULT_REMINDER_ALERT_MODE,
+  normalizeReminderAlertMode,
+  type CreateReminderInput,
+  type Reminder,
+  type ReminderAlertMode,
+  type ReminderOffsetUnit,
+  type UpdateReminderInput,
 } from '@/domain/reminder';
 import type { ReminderRepository } from '@/repositories/ReminderRepository';
 import { withConsultationWriteLock } from '@/storage/consultationWriteMutex';
@@ -13,6 +17,7 @@ type ReminderRow = {
   id: string;
   consultation_id: string;
   type: Reminder['type'];
+  alert_mode: ReminderAlertMode | null;
   trigger_at: string;
   offset_value: number | null;
   offset_unit: ReminderOffsetUnit | null;
@@ -26,6 +31,7 @@ function toReminder(row: ReminderRow): Reminder {
     id: row.id,
     consultationId: row.consultation_id,
     type: row.type,
+    alertMode: row.alert_mode ?? DEFAULT_REMINDER_ALERT_MODE,
     triggerAt: row.trigger_at,
     offsetValue: row.offset_value,
     offsetUnit: row.offset_unit,
@@ -91,6 +97,7 @@ export class SQLiteReminderRepository implements ReminderRepository {
       id: await createGlobalId(),
       consultationId: input.consultationId,
       type: input.type,
+      alertMode: normalizeReminderAlertMode(input.alertMode),
       triggerAt: normalizeTriggerAt(input.triggerAt),
       offsetValue: normalizeOffsetValue(input.offsetValue),
       offsetUnit: normalizeOffsetUnit(input.offsetUnit, normalizeOffsetValue(input.offsetValue)),
@@ -110,12 +117,13 @@ export class SQLiteReminderRepository implements ReminderRepository {
 
       await this.database.runAsync(
         `INSERT INTO reminders (
-          id, consultation_id, type, trigger_at, offset_value, offset_unit,
+          id, consultation_id, type, alert_mode, trigger_at, offset_value, offset_unit,
           notification_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         reminder.id,
         reminder.consultationId,
         reminder.type,
+        reminder.alertMode,
         reminder.triggerAt,
         reminder.offsetValue,
         reminder.offsetUnit,
@@ -128,7 +136,7 @@ export class SQLiteReminderRepository implements ReminderRepository {
     return reminder;
   }
 
-  async update(id: string, input: Partial<Pick<Reminder, 'notificationId' | 'triggerAt' | 'offsetValue' | 'offsetUnit'>>): Promise<Reminder> {
+  async update(id: string, input: UpdateReminderInput): Promise<Reminder> {
     await withConsultationWriteLock(async () => {
       const current = await this.database.getFirstAsync<ReminderRow>(
         'SELECT * FROM reminders WHERE id = ?',
@@ -138,6 +146,10 @@ export class SQLiteReminderRepository implements ReminderRepository {
         throw new Error('Lembrete não encontrado.');
       }
 
+      const currentAlertMode = current.alert_mode ?? DEFAULT_REMINDER_ALERT_MODE;
+      const alertMode = input.alertMode === undefined
+        ? normalizeReminderAlertMode(currentAlertMode)
+        : normalizeReminderAlertMode(input.alertMode);
       const currentOffsetValue = current.offset_value;
       const offsetValue = input.offsetValue === undefined
         ? currentOffsetValue
@@ -154,9 +166,10 @@ export class SQLiteReminderRepository implements ReminderRepository {
 
       await this.database.runAsync(
         `UPDATE reminders
-         SET trigger_at = ?, offset_value = ?, offset_unit = ?,
+         SET alert_mode = ?, trigger_at = ?, offset_value = ?, offset_unit = ?,
              notification_id = ?, updated_at = ?
          WHERE id = ?`,
+        alertMode,
         triggerAt,
         offsetValue,
         offsetUnit,
@@ -202,6 +215,7 @@ export class SQLiteReminderRepository implements ReminderRepository {
           id: await createGlobalId(),
           consultationId,
           type: input.type,
+          alertMode: normalizeReminderAlertMode(input.alertMode),
           triggerAt: normalizeTriggerAt(input.triggerAt),
           offsetValue,
           offsetUnit: normalizeOffsetUnit(input.offsetUnit, offsetValue),
@@ -230,12 +244,13 @@ export class SQLiteReminderRepository implements ReminderRepository {
           for (const reminder of reminders) {
             await this.database.runAsync(
               `INSERT INTO reminders (
-                id, consultation_id, type, trigger_at, offset_value, offset_unit,
+                id, consultation_id, type, alert_mode, trigger_at, offset_value, offset_unit,
                 notification_id, created_at, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               reminder.id,
               reminder.consultationId,
               reminder.type,
+              reminder.alertMode,
               reminder.triggerAt,
               reminder.offsetValue,
               reminder.offsetUnit,
@@ -256,12 +271,13 @@ export class SQLiteReminderRepository implements ReminderRepository {
         for (const reminder of reminders) {
           await transaction.runAsync(
             `INSERT INTO reminders (
-              id, consultation_id, type, trigger_at, offset_value, offset_unit,
+              id, consultation_id, type, alert_mode, trigger_at, offset_value, offset_unit,
               notification_id, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             reminder.id,
             reminder.consultationId,
             reminder.type,
+            reminder.alertMode,
             reminder.triggerAt,
             reminder.offsetValue,
             reminder.offsetUnit,
