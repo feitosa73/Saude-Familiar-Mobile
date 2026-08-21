@@ -126,6 +126,9 @@ export async function restoreCancelledReminderNotifications(input: {
   reminderRepository: ReminderRepository;
 }): Promise<{ reminders: Reminder[]; warning: string | null }> {
   const restoredReminders = input.reminders.map((reminder) => ({ ...reminder }));
+  if (Platform.OS === 'web') {
+    return { reminders: restoredReminders, warning: null };
+  }
   const resultById = new Map(input.cancellation.results.map((result) => [result.reminderId, result]));
   const failures: string[] = [];
 
@@ -157,15 +160,21 @@ export async function restoreCancelledReminderNotifications(input: {
         failures.push(`não foi possível persistir nem cancelar o novo agendamento do lembrete ${reminder.id}`);
         continue;
       }
+      try {
+        await input.reminderRepository.update(reminder.id, { notificationId: null });
+        const restoredReminder = restoredReminders.find((item) => item.id === reminder.id);
+        if (restoredReminder) restoredReminder.notificationId = null;
+      } catch {
+        failures.push(`não foi possível limpar a referência do lembrete ${reminder.id} após cancelar o novo agendamento`);
+        continue;
+      }
       failures.push(`não foi possível persistir o novo agendamento do lembrete ${reminder.id}`);
     }
   }
 
   return {
     reminders: restoredReminders,
-    warning: failures.length > 0
-      ? `A operação local falhou e ${failures.join('; ')}.`
-      : null,
+    warning: failures.length > 0 ? failures.join('; ') : null,
   };
 }
 

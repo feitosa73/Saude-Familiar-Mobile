@@ -300,6 +300,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
 
   const deletePatient = useCallback(
     async (id: string) => {
+      const deletedPatientName = patients.find((item) => item.id === id)?.name ?? 'familiar';
       const relatedConsultations = await consultationRepository.listByPatient(id);
       const relatedReminders = await listRemindersForConsultations(
         reminderRepository,
@@ -317,7 +318,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
           reminders: relatedReminders,
           cancellation,
           consultations: relatedConsultations,
-          patientName: patient?.name ?? 'familiar',
+          patientName: deletedPatientName,
           reminderRepository,
           originalError: new Error(cancellationCleanup.warning),
         });
@@ -332,7 +333,7 @@ export function LocalDataProvider({ children }: { children: React.ReactNode }) {
           reminders: relatedReminders,
           cancellation,
           consultations: relatedConsultations,
-          patientName: patient?.name ?? 'familiar',
+          patientName: deletedPatientName,
           reminderRepository,
           originalError: error,
         });
