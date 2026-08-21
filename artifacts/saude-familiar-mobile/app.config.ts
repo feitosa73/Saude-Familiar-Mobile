@@ -12,18 +12,22 @@ function isCiEnvironment(): boolean {
 
 function resolveAndroidVersionCode(): number {
   const rawValue = process.env.ANDROID_VERSION_CODE
-    ?? process.env.GITHUB_RUN_NUMBER
-    ?? String(LOCAL_ANDROID_VERSION_CODE);
+    ?? process.env.GITHUB_RUN_NUMBER;
+
+  if (rawValue === undefined) {
+    if (isCiEnvironment()) {
+      throw new Error('CI builds require ANDROID_VERSION_CODE or GITHUB_RUN_NUMBER.');
+    }
+    return LOCAL_ANDROID_VERSION_CODE;
+  }
+
   const value = Number(rawValue.trim());
   const isValid = Number.isInteger(value) && value > 0 && value <= MAX_ANDROID_VERSION_CODE;
 
   if (!isValid) {
-    if (isCiEnvironment()) {
-      throw new Error(
-        `ANDROID_VERSION_CODE must be a positive integer no greater than ${MAX_ANDROID_VERSION_CODE}; received: ${rawValue}`,
-      );
-    }
-    return LOCAL_ANDROID_VERSION_CODE;
+    throw new Error(
+      `ANDROID_VERSION_CODE must be a positive integer no greater than ${MAX_ANDROID_VERSION_CODE}; received: ${rawValue}`,
+    );
   }
 
   return value;
