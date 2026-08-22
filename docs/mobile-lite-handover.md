@@ -73,7 +73,7 @@ A lista usa `FlatList` para evitar renderização manual de listas longas. As a�
 
 ## 8. Limitações atuais
 
-A Home mantém o resumo contextual de Agendamentos do Patient ativo, sem o banner persistente `Cadastro concluído` e sem dashboard de lembretes. Resultados de Exames, interpretação clínica, comparação, laudos, anexos, Documentos/Receitas, OCR e Medicamentos continuam fora do escopo. As notificações são locais e Android-first; não há notificações remotas, Firebase, backend, compartilhamento, sincronização, calendário do dispositivo ou APIs externas. `silent` usa apenas a notificação; `normal` usa som padrão, vibração e importância HIGH; `highlight` usa som padrão, vibração e importância MAX para solicitar heads-up quando permitido.
+A Home mantém o resumo contextual de Agendamentos do Patient ativo, sem o banner persistente `Cadastro concluído` e sem dashboard de lembretes. Resultados de Exames, interpretação clínica, comparação, laudos, anexos, Documentos/Receitas, OCR e Medicamentos continuam fora do escopo. As notificações são locais e Android-first; Agendamentos elegíveis podem ser adicionados ao calendário nativo ou compartilhados localmente como arquivo ICS, mas não há compartilhamento automático, sincronização, Firebase, backend ou outras APIs externas. `silent` usa apenas a notificação; `normal` usa som padrão, vibração e importância HIGH; `highlight` usa som padrão, vibração e importância MAX para solicitar heads-up quando permitido.
 
 O avatar opcional do Caregiver permanece modelado, mas ainda não possui interface de captura ou seleção. A edição do Patient nesta etapa cobre apenas nome, data de nascimento e observações.
 
