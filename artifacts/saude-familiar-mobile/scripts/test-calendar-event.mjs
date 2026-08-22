@@ -98,6 +98,8 @@ const escapedEvent = buildCalendarEvent(
 const ics = buildIcsContent(escapedEvent, new Date('2026-08-22T12:34:56.000Z'));
 assertMatch(ics, /^BEGIN:VCALENDAR\r\n/, 'ICS header');
 assertMatch(ics, /VERSION:2\.0\r\n/, 'ICS version');
+assertMatch(ics, /CALSCALE:GREGORIAN\r\n/, 'ICS calendar scale');
+assertMatch(ics, /METHOD:PUBLISH\r\n/, 'ICS publish method');
 assertMatch(ics, /PRODID:-\/\/Saude Familiar Mobile\/\/Agendamentos\/\/PT-BR\r\n/, 'ICS product');
 assertMatch(ics, /BEGIN:VEVENT\r\n/, 'ICS event');
 assertMatch(ics, /UID:consulta%2Facentuada@saudefamiliar\.local\r\n/, 'ICS UID');

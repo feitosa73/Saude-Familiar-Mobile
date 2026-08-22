@@ -49,7 +49,7 @@ if (!Number.isInteger(androidVersionCode) || androidVersionCode <= 0) {
   throw new Error(`Invalid Android versionCode: ${androidVersionCode ?? 'undefined'}`);
 }
 
-if (!calendarPermission) {
+if (typeof calendarPermission !== 'string' || calendarPermission.trim() === '') {
   throw new Error('expo-calendar must define a clear calendarPermission message.');
 }
 

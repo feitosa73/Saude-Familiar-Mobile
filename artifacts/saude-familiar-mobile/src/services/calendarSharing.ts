@@ -55,11 +55,11 @@ export async function shareEventAsIcs(event: CalendarEvent): Promise<void> {
   }
 
   const fileUri = `${cacheDirectory}${event.fileName}`;
-  await FileSystem.writeAsStringAsync(fileUri, buildIcsContent(event), {
-    encoding: FileSystem.EncodingType.UTF8,
-  });
 
   try {
+    await FileSystem.writeAsStringAsync(fileUri, buildIcsContent(event), {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
     await Sharing.shareAsync(fileUri, {
       dialogTitle: 'Compartilhar agendamento',
       mimeType: 'text/calendar',

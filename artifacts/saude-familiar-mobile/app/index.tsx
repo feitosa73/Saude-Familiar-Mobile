@@ -2367,7 +2367,7 @@ const styles = StyleSheet.create({
   consultationNotes: { fontSize: 13, lineHeight: 19, fontFamily: 'Inter_400Regular', marginTop: 2 },
   consultationReminderSummary: { flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginTop: 2 },
   consultationReminderText: { flex: 1, fontSize: 12, lineHeight: 18, fontFamily: 'Inter_500Medium' },
-  consultationActions: { flexDirection: 'row', borderTopWidth: 1, paddingHorizontal: 10 },
+  consultationActions: { flexDirection: 'row', flexWrap: 'wrap', borderTopWidth: 1, paddingHorizontal: 10 },
   consultationAction: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 8 },
   consultationActionText: { fontSize: 13, fontFamily: 'Inter_700Bold' },
   backButton: {
