@@ -38,6 +38,9 @@ jobs:
       - name: Typecheck workspace
         run: pnpm run typecheck
 
+      - name: Test calendar event generation
+        run: pnpm --filter @workspace/saude-familiar-mobile test:calendar
+
       - name: Validate Expo configuration
         working-directory: artifacts/saude-familiar-mobile
         run: pnpm exec expo config --type public

@@ -402,15 +402,24 @@ importers:
 
   artifacts/saude-familiar-mobile:
     dependencies:
+      expo-calendar:
+        specifier: ~15.0.8
+        version: 15.0.8(expo@54.0.37)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))
       expo-dev-client:
         specifier: ~6.0.21
         version: 6.0.21(expo@54.0.37)
       expo-crypto:
         specifier: ~15.0.9
         version: 15.0.9(expo@54.0.37)
+      expo-file-system:
+        specifier: ~19.0.24
+        version: 19.0.24(expo@54.0.37)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))
       expo-notifications:
         specifier: ~0.32.17
         version: 0.32.17(expo@54.0.37)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
+      expo-sharing:
+        specifier: ~14.0.8
+        version: 14.0.8(expo@54.0.37)
       expo-sqlite:
         specifier: ~16.0.10
         version: 16.0.10(expo@54.0.37)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
@@ -3325,6 +3334,12 @@ packages:
       react: '*'
       react-native: '*'
 
+  expo-calendar@15.0.8:
+    resolution: {integrity: sha512-i+ojy6zFnWSPb2DYp4L4W4U5iVI+NXnuHr3xysShoV8znNOmixP1TOYuJXt5Lpz+BpHCWseU31gV1E5SSkIKsw==}
+    peerDependencies:
+      expo: '*'
+      react-native: '*'
+
   expo-constants@18.0.14:
     resolution: {integrity: sha512-BUZm9mkl/TX7zNaN0N4C83ws7mEnesCFiKhqK+rMZwTD2+Q4wWB2kBltqnC/LrCRaMyRi40XxhCRVwuKnJkxXQ==}
     peerDependencies:
@@ -3452,6 +3467,11 @@ packages:
   expo-server@1.0.7:
     resolution: {integrity: sha512-mcmyML3oXcqFUXUxtdtCL1O00ztNI2v76d+MdniXRUgHNxIcHZ05zo+DqBaOOT6LQnPk4vA4YHqQl7iGUfRb3g==}
     engines: {node: '>=20.16.0'}
+
+  expo-sharing@14.0.8:
+    resolution: {integrity: sha512-A1pPr2iBrxypFDCWVAESk532HK+db7MFXbvO2sCV9ienaFXAk7lIBm6bkqgE6vzRd9O3RGdEGzYx80cYlc089Q==}
+    peerDependencies:
+      expo: '*'
 
   expo-splash-screen@31.0.13:
     resolution: {integrity: sha512-1epJLC1cDlwwj089R2h8cxaU5uk4ONVAC+vzGiTZH4YARQhL4Stlz1MbR6yAS173GMosvkE6CAeihR7oIbCkDA==}
@@ -9448,6 +9468,10 @@ snapshots:
       react: 19.1.0
       react-native: 0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)
 
+  expo-calendar@15.0.8(expo@54.0.37)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)):
+    dependencies:
+      expo: expo@54.0.37(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@6.0.24)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
+      react-native: react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)
   expo-constants@18.0.14(expo@54.0.37)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0)):
     dependencies:
       '@expo/config': 12.0.14
@@ -9671,6 +9695,9 @@ snapshots:
 
   expo-server@1.0.7: {}
 
+  expo-sharing@14.0.8(expo@54.0.37):
+    dependencies:
+      expo: expo@54.0.37(@babel/core@7.29.7)(@expo/metro-runtime@6.1.2)(expo-router@6.0.24)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)(typescript@5.9.3)
   expo-splash-screen@31.0.13(expo@54.0.37)(typescript@5.9.3):
     dependencies:
       '@expo/prebuild-config': 54.0.9(expo@54.0.37)(typescript@5.9.3)
