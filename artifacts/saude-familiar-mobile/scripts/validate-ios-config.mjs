@@ -44,12 +44,27 @@ if (!Number.isInteger(androidVersionCode) || androidVersionCode <= 0) {
   throw new Error(`Invalid Android versionCode: ${androidVersionCode ?? 'undefined'}`);
 }
 
+const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
+const allDependencies = {
+  ...packageJson.dependencies,
+  ...packageJson.devDependencies,
+  ...packageJson.peerDependencies,
+  ...packageJson.optionalDependencies,
+};
+if (!allDependencies['expo-dev-client']) {
+  throw new Error('expo-dev-client must be declared for the development EAS profile.');
+}
+
 const easConfig = JSON.parse(readFileSync('eas.json', 'utf8'));
 const requiredProfiles = ['development', 'preview', 'production'];
 for (const profile of requiredProfiles) {
   if (!easConfig.build?.[profile]) {
     throw new Error(`Missing EAS build profile: ${profile}`);
   }
+}
+
+if (easConfig.build.development.developmentClient !== true) {
+  throw new Error('EAS development profile must set developmentClient to true.');
 }
 
 if (easConfig.submit || easConfig.build.development.autoSubmit || easConfig.build.preview.autoSubmit || easConfig.build.production.autoSubmit) {
