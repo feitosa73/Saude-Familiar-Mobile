@@ -57,6 +57,7 @@
   },
   "dependencies": {
     "expo-crypto": "~15.0.9",
+    "expo-dev-client": "~6.0.21",
     "expo-notifications": "~0.32.17",
     "expo-sqlite": "~16.0.10"
   }

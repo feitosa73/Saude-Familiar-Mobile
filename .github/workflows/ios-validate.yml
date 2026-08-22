@@ -1,0 +1,62 @@
+name: iOS Validate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-ios:
+    name: Validate iOS configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      IOS_BUILD_NUMBER: ${{ github.run_number }}
+      ANDROID_VERSION_CODE: ${{ github.run_number }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Typecheck workspace
+        run: pnpm run typecheck
+
+      - name: Export Expo configuration
+        working-directory: artifacts/saude-familiar-mobile
+        run: pnpm exec expo config --type public --json | sed -n '/^{/,$p' > /tmp/expo-config.json
+
+      - name: Validate iOS configuration
+        working-directory: artifacts/saude-familiar-mobile
+        run: node scripts/validate-ios-config.mjs /tmp/expo-config.json
+
+      - name: Generate iOS native project without signing
+        working-directory: artifacts/saude-familiar-mobile
+        env:
+          CI: '1'
+        run: pnpm exec expo prebuild --platform ios --no-install --clean
