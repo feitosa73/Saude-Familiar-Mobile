@@ -2,7 +2,9 @@ import type { ExpoConfig } from 'expo/config';
 
 const PRODUCT_VERSION = '1.0.0';
 const LOCAL_ANDROID_VERSION_CODE = 1;
+const LOCAL_IOS_BUILD_NUMBER = '1';
 const MAX_ANDROID_VERSION_CODE = 2_147_483_647;
+const MAX_IOS_BUILD_NUMBER = 2_147_483_647;
 
 function isCiEnvironment(): boolean {
   return process.env.CI === '1'
@@ -36,6 +38,32 @@ function resolveAndroidVersionCode(): number {
   return value;
 }
 
+function resolveIosBuildNumber(): string {
+  const rawValue = process.env.IOS_BUILD_NUMBER
+    ?? process.env.GITHUB_RUN_NUMBER;
+  const sourceName = process.env.IOS_BUILD_NUMBER !== undefined
+    ? 'IOS_BUILD_NUMBER'
+    : 'GITHUB_RUN_NUMBER';
+
+  if (rawValue === undefined) {
+    if (isCiEnvironment()) {
+      throw new Error('CI builds require IOS_BUILD_NUMBER or GITHUB_RUN_NUMBER.');
+    }
+    return LOCAL_IOS_BUILD_NUMBER;
+  }
+
+  const value = Number(rawValue.trim());
+  const isValid = Number.isInteger(value) && value > 0 && value <= MAX_IOS_BUILD_NUMBER;
+
+  if (!isValid) {
+    throw new Error(
+      `${sourceName} must be a positive integer no greater than ${MAX_IOS_BUILD_NUMBER}; received: ${rawValue}`,
+    );
+  }
+
+  return String(value);
+}
+
 const config: ExpoConfig = {
   name: 'Saúde Familiar Mobile',
   slug: 'saude-familiar-mobile',
@@ -52,6 +80,8 @@ const config: ExpoConfig = {
   },
   ios: {
     supportsTablet: false,
+    bundleIdentifier: 'br.com.fiqueok.saudefamiliar',
+    buildNumber: resolveIosBuildNumber(),
   },
   android: {
     package: 'br.com.fiqueok.saudefamiliar',
