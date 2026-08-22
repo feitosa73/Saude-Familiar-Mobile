@@ -100,6 +100,12 @@ const config: ExpoConfig = {
     ],
     'expo-font',
     'expo-notifications',
+    [
+      'expo-calendar',
+      {
+        calendarPermission: 'Permitir que o Saúde Familiar adicione agendamentos ao seu calendário.',
+      },
+    ],
     'expo-web-browser',
   ],
   experiments: {

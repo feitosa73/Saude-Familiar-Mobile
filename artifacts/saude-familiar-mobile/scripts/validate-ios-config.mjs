@@ -19,6 +19,11 @@ const bundleIdentifier = config.ios?.bundleIdentifier;
 const buildNumber = config.ios?.buildNumber;
 const androidPackage = config.android?.package;
 const androidVersionCode = config.android?.versionCode;
+const calendarPlugin = config.plugins?.find(
+  (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-calendar',
+);
+const calendarPermission = Array.isArray(calendarPlugin) ? calendarPlugin[1]?.calendarPermission : undefined;
+const androidPermissions = config.android?.permissions ?? [];
 
 if (version !== expectedVersion) {
   throw new Error(`Expected iOS version ${expectedVersion}; received: ${version ?? 'undefined'}`);
@@ -42,6 +47,16 @@ if (androidPackage !== expectedBundleIdentifier) {
 
 if (!Number.isInteger(androidVersionCode) || androidVersionCode <= 0) {
   throw new Error(`Invalid Android versionCode: ${androidVersionCode ?? 'undefined'}`);
+}
+
+if (!calendarPermission) {
+  throw new Error('expo-calendar must define a clear calendarPermission message.');
+}
+
+for (const permission of ['android.permission.READ_CALENDAR', 'android.permission.WRITE_CALENDAR']) {
+  if (!androidPermissions.includes(permission)) {
+    throw new Error(`Missing Android calendar permission: ${permission}`);
+  }
 }
 
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
@@ -81,5 +96,6 @@ if (easConfig.submit || easConfig.build.development.autoSubmit || easConfig.buil
 console.log(`iOS version: ${version} (${buildNumber})`);
 console.log(`Bundle ID: ${bundleIdentifier}`);
 console.log(`Android package: ${androidPackage} (${androidVersionCode})`);
+console.log('Calendar plugin and Android permissions: enabled');
 console.log('EAS appVersionSource: remote');
 console.log('EAS profiles: development, preview, production (autoIncrement enabled)');

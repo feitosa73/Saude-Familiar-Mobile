@@ -39,6 +39,12 @@ import {
   type ReminderSelection,
 } from '@/utils/reminderPlanning';
 import { buildHomeAppointmentSummary } from '@/utils/homeAppointmentSummary';
+import {
+  addEventToDeviceCalendar,
+  createCalendarEvent,
+  shareEventAsIcs,
+} from '@/services/calendarSharing';
+import { isCalendarShareEligible } from '@/utils/calendarEvent';
 
 type OnboardingStep = 'welcome' | 'caregiver-form';
 type PatientView = 'home' | 'list' | 'add' | 'edit';
@@ -1468,11 +1474,13 @@ function ConsultationCard({
   reminders,
   onDelete,
   onEdit,
+  onShare,
 }: {
   consultation: Consultation;
   reminders: Reminder[];
   onDelete: (consultation: Consultation) => void;
   onEdit: (consultation: Consultation) => void;
+  onShare: (consultation: Consultation) => void;
 }) {
   const colors = useColors();
   const dateLabel = consultationDateLabel(consultation);
@@ -1526,6 +1534,19 @@ function ConsultationCard({
         ) : null}
       </View>
       <View style={[styles.consultationActions, { borderTopColor: colors.border }]}>
+        {isCalendarShareEligible(consultation) ? (
+          <Pressable
+            accessibilityHint="Escolha adicionar ao calendário ou compartilhar com outro aplicativo."
+            accessibilityLabel={`Compartilhar agendamento de ${consultation.specialty}`}
+            accessibilityRole="button"
+            onPress={() => onShare(consultation)}
+            style={({ pressed }) => [styles.consultationAction, pressed ? styles.pressed : null]}
+            testID={`consultation-share-${consultation.id}`}
+          >
+            <Ionicons name="share-social-outline" size={18} color={colors.primary} />
+            <Text style={[styles.consultationActionText, { color: colors.primary }]}>Compartilhar</Text>
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityLabel={`Editar ${consultationTypeLabel(consultation.type).toLowerCase()} de ${consultation.specialty}`}
           accessibilityRole="button"
@@ -1558,6 +1579,7 @@ function ConsultationsScreen({
   onBack,
   onDelete,
   onEdit,
+  onShare,
   patient,
 }: {
   consultations: Consultation[];
@@ -1566,6 +1588,7 @@ function ConsultationsScreen({
   onBack: () => void;
   onDelete: (consultation: Consultation) => void;
   onEdit: (consultation: Consultation) => void;
+  onShare: (consultation: Consultation) => void;
   patient: Patient;
 }) {
   const colors = useColors();
@@ -1591,6 +1614,7 @@ function ConsultationsScreen({
           reminders={reminders.filter((reminder) => reminder.consultationId === item.id)}
           onDelete={onDelete}
           onEdit={onEdit}
+          onShare={onShare}
         />
       )) : (
         <Text style={[styles.consultationEmptyText, { color: colors.mutedForeground }]}>{emptyText}</Text>
@@ -1924,6 +1948,90 @@ export default function IndexScreen() {
     }
   }
 
+  function handleShareWithSomeone(consultation: Consultation) {
+    let event: ReturnType<typeof createCalendarEvent>;
+    try {
+      event = createCalendarEvent(consultation, patient?.name ?? 'familiar');
+    } catch (error) {
+      Alert.alert(
+        'Não foi possível preparar',
+        error instanceof Error ? error.message : 'Tente novamente.',
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Compartilhar agendamento',
+      'Você está compartilhando informações deste agendamento com outro aplicativo. Compartilhe apenas com pessoas de sua confiança.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Continuar',
+          onPress: () => {
+            void shareEventAsIcs(event).catch((error: unknown) => {
+              Alert.alert(
+                'Não foi possível compartilhar',
+                error instanceof Error ? error.message : 'Tente novamente.',
+              );
+            });
+          },
+        },
+      ],
+    );
+  }
+
+  function handleAddToCalendar(consultation: Consultation) {
+    let event: ReturnType<typeof createCalendarEvent>;
+    try {
+      event = createCalendarEvent(consultation, patient?.name ?? 'familiar');
+    } catch (error) {
+      Alert.alert(
+        'Não foi possível preparar',
+        error instanceof Error ? error.message : 'Tente novamente.',
+      );
+      return;
+    }
+
+    void addEventToDeviceCalendar(event)
+      .then((result) => {
+        if (result.status === 'permission-denied') {
+          Alert.alert(
+            'Permissão necessária',
+            'Permita o acesso ao calendário para adicionar este agendamento. Você pode continuar usando o Saúde Familiar sem essa permissão.',
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        Alert.alert(
+          'Não foi possível adicionar',
+          error instanceof Error ? error.message : 'Tente novamente.',
+        );
+      });
+  }
+
+  function handleShareConsultation(consultation: Consultation) {
+    if (!isCalendarShareEligible(consultation)) {
+      Alert.alert('Agendamento não disponível', 'Somente agendamentos com data e hora válidas podem ser compartilhados.');
+      return;
+    }
+
+    Alert.alert(
+      'Compartilhar agendamento',
+      'Escolha como deseja usar este agendamento.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Adicionar ao meu calendário',
+          onPress: () => handleAddToCalendar(consultation),
+        },
+        {
+          text: 'Compartilhar com alguém',
+          onPress: () => handleShareWithSomeone(consultation),
+        },
+      ],
+    );
+  }
+
   function handleDeleteConsultation(consultation: Consultation) {
     Alert.alert(
       `Excluir ${consultationTypeLabel(consultation.type).toLowerCase()}?`,
@@ -2114,6 +2222,7 @@ export default function IndexScreen() {
           setEditingConsultation(consultationToEdit);
           setConsultationView('edit');
         }}
+        onShare={handleShareConsultation}
         patient={patient}
       />
     );
