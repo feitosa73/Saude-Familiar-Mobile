@@ -61,6 +61,13 @@ for (const profile of requiredProfiles) {
   if (!easConfig.build?.[profile]) {
     throw new Error(`Missing EAS build profile: ${profile}`);
   }
+  if (easConfig.build[profile].autoIncrement !== true) {
+    throw new Error(`EAS profile ${profile} must enable autoIncrement.`);
+  }
+}
+
+if (easConfig.cli?.appVersionSource !== 'remote') {
+  throw new Error('EAS cli.appVersionSource must be remote.');
 }
 
 if (easConfig.build.development.developmentClient !== true) {
@@ -74,4 +81,5 @@ if (easConfig.submit || easConfig.build.development.autoSubmit || easConfig.buil
 console.log(`iOS version: ${version} (${buildNumber})`);
 console.log(`Bundle ID: ${bundleIdentifier}`);
 console.log(`Android package: ${androidPackage} (${androidVersionCode})`);
-console.log('EAS profiles: development, preview, production');
+console.log('EAS appVersionSource: remote');
+console.log('EAS profiles: development, preview, production (autoIncrement enabled)');
